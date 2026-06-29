@@ -5,38 +5,35 @@ module baud_generator #(
 )(
   input  logic                  clk,
   input  logic                  rst_n,
-  input  baud_rate_e            baud_rate_ctrl,
+  input  logic [15:0]           baud_div,
   input  logic                  active,
   output logic                  baud_out
 );
 
-  logic [15:0] max_count;
-  logic [15:0] counter;
+  logic [19:0] max_count;
+  logic [19:0] counter;
 
   always_comb begin
-    case (baud_rate_ctrl)
-      BAUD_2400:  max_count = 16'(32'd50000000 / (2400 * OVERSAMPLING));
-      BAUD_4800:  max_count = 16'(32'd50000000 / (4800 * OVERSAMPLING));
-      BAUD_9600:  max_count = 16'(32'd50000000 / (9600 * OVERSAMPLING));
-      BAUD_19200: max_count = 16'(32'd50000000 / (19200 * OVERSAMPLING));
-      BAUD_115200:max_count = 16'(32'd50000000 / (115200 * OVERSAMPLING));
-      default:    max_count = 16'(32'd50000000 / (19200 * OVERSAMPLING));
-    endcase
+    if (OVERSAMPLING == 1) begin
+      max_count = 20'(baud_div) * 20'd16;
+    end else begin
+      max_count = 20'(baud_div);
+    end
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      counter  <= 16'd0;
+      counter  <= 20'd0;
       baud_out <= 1'b0;
     end else if (!active) begin
-      counter  <= 16'd0;
+      counter  <= 20'd0;
       baud_out <= 1'b0;
     end else begin
-      if (counter >= max_count - 16'd1) begin
-        counter  <= 16'd0;
+      if (counter >= max_count - 20'd1) begin
+        counter  <= 20'd0;
         baud_out <= 1'b1;
       end else begin
-        counter  <= counter + 16'd1;
+        counter  <= counter + 20'd1;
         baud_out <= 1'b0;
       end
     end

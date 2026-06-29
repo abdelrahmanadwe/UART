@@ -7,7 +7,6 @@ import uvm_pkg::*;
 class uart_reg_cfg extends uvm_reg;
   `uvm_object_utils(uart_reg_cfg)
 
-  rand uvm_reg_field baud_rate;
   rand uvm_reg_field data_size;
   rand uvm_reg_field parity;
   rand uvm_reg_field stop_bits;
@@ -19,7 +18,6 @@ class uart_reg_cfg extends uvm_reg;
   endfunction
 
   virtual function void build();
-    baud_rate = uvm_reg_field::type_id::create("baud_rate");
     data_size = uvm_reg_field::type_id::create("data_size");
     parity    = uvm_reg_field::type_id::create("parity");
     stop_bits = uvm_reg_field::type_id::create("stop_bits");
@@ -27,12 +25,29 @@ class uart_reg_cfg extends uvm_reg;
     rx_enable = uvm_reg_field::type_id::create("rx_enable");
 
     // configure(parent, size, lsb_pos, access, volatile, reset, has_reset, is_rand, individually_accessible)
-    baud_rate.configure(this, 3, 0, "RW", 0, 3'b011, 1, 1, 0);
     data_size.configure(this, 2, 3, "RW", 0, 2'b11,  1, 1, 0);
     parity.configure   (this, 2, 5, "RW", 0, 2'b00,  1, 1, 0);
     stop_bits.configure(this, 1, 7, "RW", 0, 1'b0,   1, 1, 0);
     tx_enable.configure(this, 1, 8, "RW", 0, 1'b0,   1, 1, 0);
     rx_enable.configure(this, 1, 9, "RW", 0, 1'b0,   1, 1, 0);
+  endfunction
+endclass
+
+// -----------------------------------------------------------------------------
+// BAUD_DIV Register Definition
+// -----------------------------------------------------------------------------
+class uart_reg_baud_div extends uvm_reg;
+  `uvm_object_utils(uart_reg_baud_div)
+
+  rand uvm_reg_field divisor;
+
+  function new(string name = "uart_reg_baud_div");
+    super.new(name, 32, UVM_NO_COVERAGE);
+  endfunction
+
+  virtual function void build();
+    divisor = uvm_reg_field::type_id::create("divisor");
+    divisor.configure(this, 16, 0, "RW", 0, 16'd163, 1, 1, 0);
   endfunction
 endclass
 
@@ -212,6 +227,7 @@ class uart_reg_block extends uvm_reg_block;
   uart_reg_mis          mis;
   rand uart_reg_tx_data tx_data;
   uart_reg_rx_data      rx_data;
+  rand uart_reg_baud_div baud_div;
 
   uvm_reg_map           default_map;
 
@@ -248,6 +264,10 @@ class uart_reg_block extends uvm_reg_block;
     rx_data.configure(this);
     rx_data.build();
 
+    baud_div = uart_reg_baud_div::type_id::create("baud_div");
+    baud_div.configure(this);
+    baud_div.build();
+
     // Create address map: default_map
     // name, base_addr, n_bytes, endian
     default_map = create_map("default_map", 'h0, 4, UVM_LITTLE_ENDIAN);
@@ -260,6 +280,7 @@ class uart_reg_block extends uvm_reg_block;
     default_map.add_reg(mis,     'h10, "RO");
     default_map.add_reg(tx_data, 'h14, "WO");
     default_map.add_reg(rx_data, 'h18, "RO");
+    default_map.add_reg(baud_div, 'h1C, "RW");
 
     lock_model();
   endfunction

@@ -19,12 +19,4 @@ package uart_defs;
     STOP_2_BITS = 1'b1
   } stop_bits_e;
 
-  typedef enum logic [2:0] {
-    BAUD_2400   = 3'b000,
-    BAUD_4800   = 3'b001,
-    BAUD_9600   = 3'b010,
-    BAUD_19200  = 3'b011,
-    BAUD_115200 = 3'b100
-  } baud_rate_e;
-
 endpackage

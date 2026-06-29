@@ -12,15 +12,14 @@ This document describes the memory-mapped register interface of the UART periphe
 
 ## Register Summary
 
-| Offset | Name | Access | Reset Value | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | [CFG](#0x00--cfg--configuration-register) | RW | `0x0000_001B` | Line configuration & enables (baud, data size, parity, stop bits, enables). |
+| `0x00` | [CFG](#0x00--cfg--configuration-register) | RW | `0x0000_0018` | Line configuration & enables (data size, parity, stop bits, enables). |
 | `0x04` | [STATUS](#0x04--status--status-register) | RO | `0x0000_0001` | TX ready and RX data available status flags. |
 | `0x08` | [RIS](#0x08--ris--raw-interrupt-status) | RW1C / RO | `0x0000_0010` | Raw (unmasked) interrupt event flags. Bit 4 is level-sensitive (RO), bits [3:0] are W1C. |
 | `0x0C` | [IER](#0x0c--ier--interrupt-enable-register) | RW | `0x0000_0000` | Interrupt enable masks. |
 | `0x10` | [MIS](#0x10--mis--masked-interrupt-status) | RO | `0x0000_0000` | Masked interrupt status (RIS AND IER). |
 | `0x14` | [TX_DATA](#0x14--tx_data--transmit-data-register) | WO | `0x0000_0000` | Data byte to transmit. |
 | `0x18` | [RX_DATA](#0x18--rx_data--receive-data-register) | RO | `0x0000_0000` | Last received data byte. Reading clears `STATUS.rx_valid` and `RIS.rx_done`. |
+| `0x1C` | [BAUD_DIV](#0x1c--baud_div--baud-rate-divisor-register) | RW | `0x0000_00A3` | Baud rate divisor value. |
 
 > [!NOTE]
 > **Access Types**: **RW** = Read/Write, **RO** = Read Only, **WO** = Write Only, **RW1C** = Read / Write-1-to-Clear.
@@ -35,7 +34,7 @@ Configures the UART line parameters and enables/disables transmission/reception.
 
 | Bits | Field | Access | Reset | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `[2:0]` | `baud_rate` | RW | `3'b011` | Baud rate selection. See encoding table below. |
+| `[2:0]` | — | — | `0` | Reserved. |
 | `[4:3]` | `data_size` | RW | `2'b11` | Number of data bits per frame. See encoding table below. |
 | `[6:5]` | `parity` | RW | `2'b00` | Parity mode selection. See encoding table below (Atmega Standard). |
 | `[7]` | `stop_bits` | RW | `1'b0` | Number of stop bits. `0` = 1 stop bit, `1` = 2 stop bits. |
@@ -45,17 +44,6 @@ Configures the UART line parameters and enables/disables transmission/reception.
 
 > [!IMPORTANT]
 > **TX & RX Enables default to `0` after reset**. You must configure the line settings and set bits [9:8] to `1` before attempting any transmission or reception.
-
-#### Baud Rate Encoding (`baud_rate`)
-
-| Value | Baud Rate |
-| :--- | :--- |
-| `3'b000` | 2400 |
-| `3'b001` | 4800 |
-| `3'b010` | 9600 |
-| `3'b011` | 19200 (Default) |
-| `3'b100` | 115200 |
-| `3'b101`–`3'b111` | Reserved (defaults to 19200) |
 
 #### Data Size Encoding (`data_size`)
 
@@ -179,6 +167,30 @@ Read-only register holding the last received byte.
 
 ---
 
+### `0x1C` — BAUD_DIV (Baud Rate Divisor Register)
+
+Read/Write register configuring the baud rate division factor. This register is frequency-independent and works across any clock rate.
+
+| Bits | Field | Access | Reset | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `[15:0]` | `divisor` | RW | `16'd163` | Baud rate divisor value. Sets the 16x oversampling clock generator. |
+| `[31:16]` | — | — | `0` | Reserved. |
+
+#### Baud Rate Calculation Equation
+The software driver calculates the divisor value using the following equation:
+$$\text{divisor} = \frac{F_{\text{CLK}}}{\text{Baud Rate} \times 16}$$
+
+#### Configuration Examples ($F_{\text{CLK}} = 50\text{ MHz}$)
+| Target Baud Rate | Calculation | Divisor (Decimal) | Divisor (Hex) |
+| :--- | :--- | :--- | :--- |
+| **2400** | $\frac{50,000,000}{2400 \times 16} = 1302.08$ | `1302` | `0x0516` |
+| **4800** | $\frac{50,000,000}{4800 \times 16} = 651.04$ | `651` | `0x028B` |
+| **9600** | $\frac{50,000,000}{9600 \times 16} = 325.52$ | `326` | `0x0146` |
+| **19200** | $\frac{50,000,000}{19200 \times 16} = 162.76$ | `163` | `0x00A3` |
+| **115200** | $\frac{50,000,000}{115200 \times 16} = 27.12$ | `27` | `0x001B` |
+
+---
+
 ## Memory Map Visual
 
 ```
@@ -198,13 +210,23 @@ Read-only register holding the last received byte.
           │      TX_DATA (WO)             │
  0x18     ├───────────────────────────────┤
           │      RX_DATA (RO)             │
+ 0x1C     ├───────────────────────────────┤
+          │      BAUD_DIV (RW)            │
           └───────────────────────────────┘
- 0x1C     Unmapped (PSLVERR on access)
 ```
 
 ---
 
 ## Typical Software Usage
+
+### Initialization (e.g. 115200 Baud at 50 MHz clock)
+```c
+// 1. Configure divisor for 115200 Baud: 50,000,000 / (115200 * 16) = 27
+UART->BAUD_DIV = 27;
+
+// 2. Configure line parameters (8-bit data, no parity, 1 stop bit) and enable TX/RX
+UART->CFG = 0x318; 
+```
 
 ### Transmitting a Byte
 ```c

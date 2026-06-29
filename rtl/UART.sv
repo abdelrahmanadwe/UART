@@ -41,7 +41,7 @@ module UART (
   data_size_e   data_size_ctrl;
   parity_ctrl_e parity_ctrl;
   stop_bits_e   stop_bits_ctrl;
-  baud_rate_e   baud_rate_ctrl;
+  logic [15:0]  baud_div;
   logic         tx_enable_ctrl;
   logic         rx_enable_ctrl;
 
@@ -75,7 +75,7 @@ module UART (
     .data_size_ctrl       (data_size_ctrl),
     .parity_ctrl          (parity_ctrl),
     .stop_bits_ctrl       (stop_bits_ctrl),
-    .baud_rate_ctrl       (baud_rate_ctrl),
+    .baud_div             (baud_div),
     .tx_enable_ctrl       (tx_enable_ctrl),
     .rx_enable_ctrl       (rx_enable_ctrl),
     .irq_tx_ready         (irq_tx_ready),
@@ -102,7 +102,7 @@ module UART (
     .data_size_ctrl       (data_size_ctrl),
     .parity_ctrl          (parity_ctrl),
     .stop_bits_ctrl       (stop_bits_ctrl),
-    .baud_rate_ctrl       (baud_rate_ctrl),
+    .baud_div             (baud_div),
     .tx_serial            (tx_serial),
     .rx_serial            (rx_serial_gated)
   );

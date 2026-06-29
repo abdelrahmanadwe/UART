@@ -7,7 +7,7 @@ module uart_rx (
   input  data_size_e            data_size_ctrl,
   input  parity_ctrl_e          parity_ctrl,
   input  stop_bits_e            stop_bits_ctrl,
-  input  baud_rate_e            baud_rate_ctrl,
+  input  logic [15:0]           baud_div,
 
   output logic [7:0]            P_DATA,
   output logic                  Data_Valid,
@@ -25,16 +25,15 @@ module uart_rx (
   data_size_e   latched_data_size;
   parity_ctrl_e latched_parity_ctrl;
   stop_bits_e   latched_stop_bits;
-  baud_rate_e   latched_baud_rate;
+  logic [15:0]  latched_baud_div;
 
   // Deserializer parallel data output before registration
   logic [7:0]   deserialized_data;
 
-  // Instantiate Baud Rate Generator for RX (16x oversampling)
   baud_generator #(.OVERSAMPLING(16)) u_baud_generator (
     .clk            (clk),
     .rst_n          (rst_n),
-    .baud_rate_ctrl (latched_baud_rate),
+    .baud_div       (latched_baud_div),
     .active         (rx_active),
     .baud_out       (clk_en_16x)
   );
@@ -58,7 +57,7 @@ module uart_rx (
     .data_size_ctrl      (data_size_ctrl),
     .parity_ctrl         (parity_ctrl),
     .stop_bits_ctrl      (stop_bits_ctrl),
-    .baud_rate_ctrl      (baud_rate_ctrl),
+    .baud_div            (baud_div),
     .deserialized_data   (deserialized_data),
     .sample_pulse        (sample_pulse),
     .rx_in_sampled       (rx_in_sampled),
@@ -70,7 +69,7 @@ module uart_rx (
     .latched_data_size   (latched_data_size),
     .latched_parity_ctrl (latched_parity_ctrl),
     .latched_stop_bits   (latched_stop_bits),
-    .latched_baud_rate   (latched_baud_rate)
+    .latched_baud_div    (latched_baud_div)
   );
 
 endmodule

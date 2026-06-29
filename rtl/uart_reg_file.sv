@@ -27,7 +27,7 @@ module uart_reg_file (
   output data_size_e            data_size_ctrl,
   output parity_ctrl_e          parity_ctrl,
   output stop_bits_e            stop_bits_ctrl,
-  output baud_rate_e            baud_rate_ctrl,
+  output logic [15:0]           baud_div,
   output logic                  tx_enable_ctrl,
   output logic                  rx_enable_ctrl,
 
@@ -49,6 +49,7 @@ module uart_reg_file (
   localparam bit [4:0] ADDR_INTR_MASK = 5'h10;
   localparam bit [4:0] ADDR_TX_DATA   = 5'h14;
   localparam bit [4:0] ADDR_RX_DATA   = 5'h18;
+  localparam bit [4:0] ADDR_BAUD_DIV  = 5'h1C;
 
   // Generate internal write/read strobe signals
   // Side-effects should only occur during the APB ACCESS phase (PSEL & PENABLE)
@@ -66,14 +67,15 @@ module uart_reg_file (
                       (PADDR == ADDR_INTR_EN) ||
                       (PADDR == ADDR_INTR_MASK) ||
                       (PADDR == ADDR_TX_DATA) ||
-                      (PADDR == ADDR_RX_DATA);
+                      (PADDR == ADDR_RX_DATA) ||
+                      (PADDR == ADDR_BAUD_DIV);
 
   // Ready and Slave Error logic
   assign PREADY  = 1'b1; // Zero wait-states
   assign PSLVERR = PSEL && PENABLE && !addr_valid;
 
   // 1. Config Register (CFG)
-  // [2:0]: baud_rate_ctrl (Default: BAUD_19200 = 3'b011)
+  // [2:0]: Reserved/Unused
   // [4:3]: data_size_ctrl (Default: DATA_8_BITS = 2'b11)
   // [6:5]: parity_ctrl    (Default: PARITY_NONE = 2'b00)
   // [7]  : stop_bits_ctrl  (Default: STOP_1_BIT  = 1'b0)
@@ -81,7 +83,6 @@ module uart_reg_file (
   // [9]  : rx_enable_ctrl  (Default: 1'b0)
   logic [9:0] cfg_reg;
   
-  assign baud_rate_ctrl  = baud_rate_e'(cfg_reg[2:0]);
   assign data_size_ctrl  = data_size_e'(cfg_reg[4:3]);
   assign parity_ctrl     = parity_ctrl_e'(cfg_reg[6:5]);
   assign stop_bits_ctrl  = stop_bits_e'(cfg_reg[7]);
@@ -90,9 +91,21 @@ module uart_reg_file (
 
   always_ff @(posedge PCLK or negedge PRESETn) begin
     if (!PRESETn) begin
-      cfg_reg <= 10'h1B; // 19.2K Baud, 8-bit, No Parity, 1 Stop, TX/RX Disabled
+      cfg_reg <= 10'h18; // 8-bit, No Parity, 1 Stop, TX/RX Disabled
     end else if (reg_write && PADDR == ADDR_CFG) begin
       cfg_reg <= PWDATA[9:0];
+    end
+  end
+
+  // 1b. Baud Divisor Register (BAUD_DIV)
+  logic [15:0] baud_div_reg;
+  assign baud_div = baud_div_reg;
+
+  always_ff @(posedge PCLK or negedge PRESETn) begin
+    if (!PRESETn) begin
+      baud_div_reg <= 16'd163; // Default 19.2K Baud under 50MHz
+    end else if (reg_write && PADDR == ADDR_BAUD_DIV) begin
+      baud_div_reg <= PWDATA[15:0];
     end
   end
 
@@ -255,6 +268,7 @@ module uart_reg_file (
       ADDR_INTR_EN:   PRDATA = {26'b0, intr_en_reg};
       ADDR_INTR_MASK: PRDATA = {26'b0, intr_mask_reg};
       ADDR_RX_DATA:   PRDATA = {24'b0, rx_data_reg};
+      ADDR_BAUD_DIV:  PRDATA = {16'b0, baud_div_reg};
       default:        PRDATA = 32'b0;
     endcase
   end

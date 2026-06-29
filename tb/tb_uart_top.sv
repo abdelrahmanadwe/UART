@@ -78,6 +78,7 @@ module tb_uart_top;
   localparam bit [4:0] ADDR_INTR_MASK = 5'h10;
   localparam bit [4:0] ADDR_TX_DATA   = 5'h14;
   localparam bit [4:0] ADDR_RX_DATA   = 5'h18;
+  localparam bit [4:0] ADDR_BAUD_DIV  = 5'h1C;
 
   // Queue to track expected loopback data
   logic [7:0] expected_queue[$];
@@ -167,16 +168,17 @@ module tb_uart_top;
     if (serial_line !== 1'b1) $error("TX transmitted data when disabled!");
     $display("[PRE-TEST] TX disabling verified successfully.");
 
-    // Now enable TX/RX by writing 32'h31B (10'b11_0001_1011) to ADDR_CFG
-    $display("[PRE-TEST] Enabling TX and RX (writing 32'h31B to CFG)...");
-    write_reg(ADDR_CFG, 32'h31B);
+    // Now enable TX/RX by writing 32'h318 (10'b11_0001_1000) to ADDR_CFG and 163 to ADDR_BAUD_DIV
+    $display("[PRE-TEST] Enabling TX and RX...");
+    write_reg(ADDR_CFG, 32'h318);
+    write_reg(ADDR_BAUD_DIV, 32'd163);
     repeat (10) @(posedge clk);
 
     // ==========================================
     // Test Case 1: 8-bit, No Parity, 1 Stop, 19.2K (Defaults)
     // ==========================================
-    $display("\n[TEST CASE 1] Default Config: 8-bit, No Parity, 1 Stop, 19.2K Baud");
-    // Config Register: baud=3'b011, size=2'b11, parity=2'b00, stop=1'b0, tx/rx enabled => 10'h31B (set in pre-test)
+    // Config Register: size=2'b11, parity=2'b00, stop=1'b0, tx/rx enabled => 10'h318 (set in pre-test)
+    // Divisor Register: 163 (19.2K Baud)
     
     send_byte(8'hA5);
     
@@ -197,8 +199,9 @@ module tb_uart_top;
     // [7]   = 1'b1   (STOP_2_BITS)
     // [8]   = 1'b1   (tx_enable)
     // [9]   = 1'b1   (rx_enable)
-    // CFG value: 10'b11_1_11_00_011 = 10'h3E3
-    write_reg(ADDR_CFG, 32'h3E3);
+    // CFG value (baud rate bits are 0/ignored): 10'b11_1_11_00_000 = 10'h3E0
+    write_reg(ADDR_CFG, 32'h3E0);
+    write_reg(ADDR_BAUD_DIV, 32'd163);
     repeat (10) @(posedge clk);
 
     send_byte(8'h1F);
@@ -212,8 +215,9 @@ module tb_uart_top;
     // ==========================================
     $display("\n[TEST CASE 3] Interrupt Enable, Masking, and W1C Verification");
     
-    // Config: 8-bit, No Parity, 1 Stop, 19.2K, enabled
-    write_reg(ADDR_CFG, 32'h31B);
+    // Config: 8-bit, No Parity, 1 Stop, enabled, divisor = 163
+    write_reg(ADDR_CFG, 32'h318);
+    write_reg(ADDR_BAUD_DIV, 32'd163);
     
     // Clear any leftover raw interrupt flags from previous test cases (W1C)
     write_reg(ADDR_INTR_RAW, 32'h3F);
@@ -316,7 +320,8 @@ module tb_uart_top;
     // Test Case 4: Back-to-Back transmissions
     // ==========================================
     $display("\n[TEST CASE 4] Back-to-Back Register Loopback: 8'h33 then 8'hCC");
-    write_reg(ADDR_CFG, 32'h31B);
+    write_reg(ADDR_CFG, 32'h318);
+    write_reg(ADDR_BAUD_DIV, 32'd163);
     repeat (10) @(posedge clk);
 
     // Send first byte
@@ -342,8 +347,9 @@ module tb_uart_top;
     // [7]   = 1'b0   (STOP_1_BIT)
     // [8]   = 1'b1   (tx_enable)
     // [9]   = 1'b1   (rx_enable)
-    // CFG value: 10'b11_0001_1100 = 10'h31C
-    write_reg(ADDR_CFG, 32'h31C);
+    // CFG value: 10'b11_0001_1000 = 10'h318
+    write_reg(ADDR_CFG, 32'h318);
+    write_reg(ADDR_BAUD_DIV, 32'd27); // 50M / (115200 * 16) = 27.12 -> 27
     repeat (10) @(posedge clk);
 
     send_byte(8'hE9);
@@ -363,6 +369,8 @@ module tb_uart_top;
     
     // Enable rx_done (bit 3) and overrun_error (bit 5) interrupts (IER = 6'b101000 = 32'h28)
     write_reg(ADDR_INTR_EN, 32'h28);
+    // Write 19200 divisor to ensure clean state
+    write_reg(ADDR_BAUD_DIV, 32'd163);
     repeat (5) @(posedge clk);
 
     // Disable automatic reads in monitor thread

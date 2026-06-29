@@ -9,7 +9,7 @@ module uart_tx_fsm (
   input  data_size_e            data_size_ctrl,
   input  parity_ctrl_e          parity_ctrl,
   input  stop_bits_e            stop_bits_ctrl,
-  input  baud_rate_e            baud_rate_ctrl,
+  input  logic [15:0]           baud_div,
   input  logic                  ser_done,
 
   output logic                  ready,
@@ -23,7 +23,7 @@ module uart_tx_fsm (
   output data_size_e            latched_data_size,
   output parity_ctrl_e          latched_parity_ctrl,
   output stop_bits_e            latched_stop_bits,
-  output baud_rate_e            latched_baud_rate_ctrl
+  output logic [15:0]           latched_baud_div
 );
 
   // FSM States
@@ -126,7 +126,7 @@ module uart_tx_fsm (
       latched_data_size      <= DATA_8_BITS;
       latched_parity_ctrl    <= PARITY_NONE;
       latched_stop_bits      <= STOP_1_BIT;
-      latched_baud_rate_ctrl <= BAUD_2400;
+      latched_baud_div       <= 16'd163;
     end else begin
       state <= next_state;
 
@@ -139,7 +139,7 @@ module uart_tx_fsm (
         latched_data_size      <= data_size_ctrl;
         latched_parity_ctrl    <= parity_ctrl;
         latched_stop_bits      <= stop_bits_ctrl;
-        latched_baud_rate_ctrl <= baud_rate_ctrl;
+        latched_baud_div       <= baud_div;
       end
 
       // Stop Bit counter

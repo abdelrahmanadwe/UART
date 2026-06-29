@@ -24,23 +24,12 @@ class uart_monitor extends uvm_monitor;
     end
   endfunction
 
-  function int get_bit_cycles(baud_rate_e rate);
-    case (rate)
-      BAUD_2400:   return 20833;
-      BAUD_4800:   return 10417;
-      BAUD_9600:   return 5208;
-      BAUD_19200:  return 2604;
-      BAUD_115200: return 434;
-      default:     return 2604;
-    endcase
-  endfunction
-
   task run_phase(uvm_phase phase);
     uart_seq_item item;
     data_size_e   size;
     parity_ctrl_e parity;
     stop_bits_e   stop;
-    baud_rate_e   rate;
+    bit [15:0]    baud_div;
     int           bit_cycles;
     int           num_bits;
 
@@ -51,8 +40,8 @@ class uart_monitor extends uvm_monitor;
       @(negedge vif.tx_serial);
       
       // Read current dynamic configuration
-      get_config(size, parity, stop, rate);
-      bit_cycles = get_bit_cycles(rate);
+      get_config(size, parity, stop, baud_div);
+      bit_cycles = int'(baud_div) * 16;
       
       case (size)
         DATA_5_BITS: num_bits = 5;
@@ -69,7 +58,7 @@ class uart_monitor extends uvm_monitor;
       item.data_size   = size;
       item.parity_ctrl = parity;
       item.stop_bits   = stop;
-      item.baud_rate   = rate;
+      item.baud_div    = baud_div;
       item.data        = 8'h0;
       item.error_type  = ERR_NONE;
 
@@ -104,16 +93,21 @@ class uart_monitor extends uvm_monitor;
     end
   endtask
 
-  function void get_config(output data_size_e size, output parity_ctrl_e parity, output stop_bits_e stop, output baud_rate_e rate);
+  function void get_config(output data_size_e size, output parity_ctrl_e parity, output stop_bits_e stop, output bit [15:0] baud_div);
     if (reg_model != null) begin
-      // Access register model blocks dynamically using custom block casts in pkg or simple hierarchical naming
-      // We will define a standard way to query the mirrored value. 
-      // To avoid hard-to-cast block references, we will retrieve register objects.
       uvm_reg cfg_reg_obj;
+      uvm_reg div_reg_obj;
       cfg_reg_obj = reg_model.get_reg_by_name("cfg");
+      div_reg_obj = reg_model.get_reg_by_name("baud_div");
+      
+      if (div_reg_obj != null) begin
+        baud_div = div_reg_obj.get_mirrored_value();
+      end else begin
+        baud_div = 16'd163;
+      end
+      
       if (cfg_reg_obj != null) begin
         bit [31:0] cfg_val = cfg_reg_obj.get_mirrored_value();
-        rate   = baud_rate_e'(cfg_val[2:0]);
         size   = data_size_e'(cfg_val[4:3]);
         parity = parity_ctrl_e'(cfg_val[6:5]);
         stop   = stop_bits_e'(cfg_val[7]);
@@ -121,13 +115,12 @@ class uart_monitor extends uvm_monitor;
         size   = DATA_8_BITS;
         parity = PARITY_NONE;
         stop   = STOP_1_BIT;
-        rate   = BAUD_19200;
       end
     end else begin
       size   = DATA_8_BITS;
       parity = PARITY_NONE;
       stop   = STOP_1_BIT;
-      rate   = BAUD_19200;
+      baud_div = 16'd163;
     end
   endfunction
 

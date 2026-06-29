@@ -47,10 +47,14 @@ class uart_reg_access_vseq extends uart_vseq_base;
 
     `uvm_info("VSEQ_REG", "Starting Register Access Verification...", UVM_MEDIUM)
 
-    // 1. Verify Reset Values
     reg_model.cfg.read(status, read_val, .parent(this));
-    if (read_val !== 32'h1B) begin // Default config on reset: disables active, baud=3, parity=0, etc. => 32'h1B
-      `uvm_error("VSEQ_REG_ERR", $sformatf("CFG register reset value mismatch! Got %h, Expected 1B", read_val))
+    if (read_val !== 32'h18) begin // Default config on reset: disables active, size=3 => 32'h18
+      `uvm_error("VSEQ_REG_ERR", $sformatf("CFG register reset value mismatch! Got %h, Expected 18", read_val))
+    end
+
+    reg_model.baud_div.read(status, read_val, .parent(this));
+    if (read_val !== 32'd163) begin // Default divisor is 163 (19.2K)
+      `uvm_error("VSEQ_REG_ERR", $sformatf("BAUD_DIV register reset value mismatch! Got %d, Expected 163", read_val))
     end
 
     reg_model.status.read(status, read_val, .parent(this));
@@ -64,11 +68,18 @@ class uart_reg_access_vseq extends uart_vseq_base;
     end
 
     // 2. Perform Writes & Readbacks
-    // Configure: enable TX/RX, 8-bit, 115.2K baud => CFG value: 10'h31C
-    reg_model.cfg.write(status, 32'h31C, .parent(this));
+    // Configure: enable TX/RX, 8-bit => CFG value: 10'h318
+    reg_model.cfg.write(status, 32'h318, .parent(this));
+    reg_model.baud_div.write(status, 32'd27, .parent(this)); // 115.2K baud
+
     reg_model.cfg.read(status, read_val, .parent(this));
-    if (read_val !== 32'h31C) begin
-      `uvm_error("VSEQ_REG_ERR", $sformatf("CFG readback mismatch! Got %h, Expected 31C", read_val))
+    if (read_val !== 32'h318) begin
+      `uvm_error("VSEQ_REG_ERR", $sformatf("CFG readback mismatch! Got %h, Expected 318", read_val))
+    end
+
+    reg_model.baud_div.read(status, read_val, .parent(this));
+    if (read_val !== 32'd27) begin
+      `uvm_error("VSEQ_REG_ERR", $sformatf("BAUD_DIV readback mismatch! Got %d, Expected 27", read_val))
     end
 
     // Configure IER: Enable TX Done & Overrun interrupts => IER value: 32'h29
@@ -79,7 +90,8 @@ class uart_reg_access_vseq extends uart_vseq_base;
     end
 
     // Restore to default config
-    reg_model.cfg.write(status, 32'h01B, .parent(this));
+    reg_model.cfg.write(status, 32'h018, .parent(this));
+    reg_model.baud_div.write(status, 32'd163, .parent(this));
     reg_model.ier.write(status, 32'h0, .parent(this));
 
     `uvm_info("VSEQ_REG", "Register Access Verification Complete.", UVM_MEDIUM)
@@ -103,8 +115,9 @@ class uart_loopback_vseq extends uart_vseq_base;
 
     `uvm_info("VSEQ_LOOPBACK", "Starting Loopback Data Path Verification...", UVM_MEDIUM)
 
-    // 1. Enable TX and RX in CFG (8-bit, No Parity, 1 Stop, 19.2K => 10'h31B)
-    reg_model.cfg.write(status, 32'h31B, .parent(this));
+    // 1. Enable TX and RX in CFG (8-bit, No Parity, 1 Stop => 10'h318, Divisor = 163)
+    reg_model.cfg.write(status, 32'h318, .parent(this));
+    reg_model.baud_div.write(status, 32'd163, .parent(this));
 
     // 2. Test APB-to-Serial Transmitter (TX) Path
     // Write 8'hA5 to TX_DATA over APB
@@ -125,7 +138,7 @@ class uart_loopback_vseq extends uart_vseq_base;
     uart_item.data_size   = DATA_8_BITS;
     uart_item.parity_ctrl = PARITY_NONE;
     uart_item.stop_bits   = STOP_1_BIT;
-    uart_item.baud_rate   = BAUD_19200;
+    uart_item.baud_div    = 16'd163;
     uart_item.error_type  = ERR_NONE;
     
     // Start sequence item on UART agent sequencer
@@ -163,8 +176,9 @@ class uart_overrun_vseq extends uart_vseq_base;
 
     `uvm_info("VSEQ_OVERRUN", "Starting Data OverRun (DOR) Verification...", UVM_MEDIUM)
 
-    // 1. Enable TX and RX (10'h31B)
-    reg_model.cfg.write(status, 32'h31B, .parent(this));
+    // 1. Enable TX and RX (10'h318, Divisor = 163)
+    reg_model.cfg.write(status, 32'h318, .parent(this));
+    reg_model.baud_div.write(status, 32'd163, .parent(this));
     
     // Clear raw interrupts (W1C)
     reg_model.ris.write(status, 32'h3F, .parent(this));
@@ -175,7 +189,7 @@ class uart_overrun_vseq extends uart_vseq_base;
     uart_item1.data_size   = DATA_8_BITS;
     uart_item1.parity_ctrl = PARITY_NONE;
     uart_item1.stop_bits   = STOP_1_BIT;
-    uart_item1.baud_rate   = BAUD_19200;
+    uart_item1.baud_div    = 16'd163;
     uart_item1.error_type  = ERR_NONE;
 
     start_item(uart_item1, .sequencer(uart_seqr));
@@ -195,7 +209,7 @@ class uart_overrun_vseq extends uart_vseq_base;
     uart_item2.data_size   = DATA_8_BITS;
     uart_item2.parity_ctrl = PARITY_NONE;
     uart_item2.stop_bits   = STOP_1_BIT;
-    uart_item2.baud_rate   = BAUD_19200;
+    uart_item2.baud_div    = 16'd163;
     uart_item2.error_type  = ERR_NONE;
 
     start_item(uart_item2, .sequencer(uart_seqr));

@@ -16,11 +16,10 @@ module uart_top (
   output logic                  rx_parity_error,
   output logic                  rx_framing_error,
 
-  // Configurations (shared)
   input  data_size_e            data_size_ctrl,
   input  parity_ctrl_e          parity_ctrl,
   input  stop_bits_e            stop_bits_ctrl,
-  input  baud_rate_e            baud_rate_ctrl,
+  input  logic [15:0]           baud_div,
 
   // Serial interface
   output logic                  tx_serial,
@@ -36,7 +35,7 @@ module uart_top (
     .data_size_ctrl (data_size_ctrl),
     .parity_ctrl    (parity_ctrl),
     .stop_bits_ctrl (stop_bits_ctrl),
-    .baud_rate_ctrl (baud_rate_ctrl),
+    .baud_div       (baud_div),
     .TX_OUT         (tx_serial),
     .ready          (tx_ready),
     .tx_done        (tx_done)
@@ -50,7 +49,7 @@ module uart_top (
     .data_size_ctrl (data_size_ctrl),
     .parity_ctrl    (parity_ctrl),
     .stop_bits_ctrl (stop_bits_ctrl),
-    .baud_rate_ctrl (baud_rate_ctrl),
+    .baud_div       (baud_div),
     .P_DATA         (rx_data),
     .Data_Valid     (rx_valid),
     .parity_error   (rx_parity_error),

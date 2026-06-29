@@ -35,25 +35,13 @@ class uart_driver extends uvm_driver #(uart_seq_item);
     end
   endtask
 
-  // Helper function to return bit duration in clock cycles
-  function int get_bit_cycles(baud_rate_e rate);
-    case (rate)
-      BAUD_2400:   return 20833;
-      BAUD_4800:   return 10417;
-      BAUD_9600:   return 5208;
-      BAUD_19200:  return 2604;
-      BAUD_115200: return 434;
-      default:     return 2604;
-    endcase
-  endfunction
-
   task drive_serial_frame(uart_seq_item item);
     int bit_cycles;
     int num_bits;
     bit [7:0] active_data;
     bit parity_bit;
 
-    bit_cycles = get_bit_cycles(item.baud_rate);
+    bit_cycles = int'(item.baud_div) * 16;
 
     case (item.data_size)
       DATA_5_BITS: begin active_data = item.data & 8'h1F; num_bits = 5; end

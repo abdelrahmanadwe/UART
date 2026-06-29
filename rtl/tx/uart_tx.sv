@@ -8,7 +8,7 @@ module uart_tx (
   input  data_size_e            data_size_ctrl,
   input  parity_ctrl_e          parity_ctrl,
   input  stop_bits_e            stop_bits_ctrl,
-  input  baud_rate_e            baud_rate_ctrl,
+  input  logic [15:0]           baud_div,
 
   output logic                  TX_OUT,
   output logic                  ready,
@@ -24,12 +24,11 @@ module uart_tx (
   logic [2:0]  mux_sel;
   logic        tx_active;
 
-  // Latched signals from FSM
   logic [7:0]   latched_data;
   data_size_e   latched_data_size;
   parity_ctrl_e latched_parity_ctrl;
   stop_bits_e   latched_stop_bits;
-  baud_rate_e   latched_baud_rate_ctrl;
+  logic [15:0]  latched_baud_div;
 
   // MUX selection localparams
   localparam [2:0] MUX_SEL_IDLE   = 3'd0;
@@ -38,11 +37,10 @@ module uart_tx (
   localparam [2:0] MUX_SEL_PARITY = 3'd3;
   localparam [2:0] MUX_SEL_STOP   = 3'd4;
 
-  // Instantiate Baud Generator
   baud_generator #(.OVERSAMPLING(1)) u_baud_generator (
     .clk            (clk),
     .rst_n          (rst_n),
-    .baud_rate_ctrl (latched_baud_rate_ctrl),
+    .baud_div       (latched_baud_div),
     .active         (tx_active),
     .baud_out       (clk_en)
   );
@@ -57,7 +55,7 @@ module uart_tx (
     .data_size_ctrl         (data_size_ctrl),
     .parity_ctrl            (parity_ctrl),
     .stop_bits_ctrl         (stop_bits_ctrl),
-    .baud_rate_ctrl         (baud_rate_ctrl),
+    .baud_div               (baud_div),
     .ser_done               (ser_done),
     .ready                  (ready),
     .tx_done                (tx_done),
@@ -68,7 +66,7 @@ module uart_tx (
     .latched_data_size      (latched_data_size),
     .latched_parity_ctrl    (latched_parity_ctrl),
     .latched_stop_bits      (latched_stop_bits),
-    .latched_baud_rate_ctrl (latched_baud_rate_ctrl)
+    .latched_baud_div       (latched_baud_div)
   );
 
   // Instantiate Serializer

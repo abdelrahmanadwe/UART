@@ -8,7 +8,7 @@ module uart_rx_fsm (
   input  data_size_e            data_size_ctrl,
   input  parity_ctrl_e          parity_ctrl,
   input  stop_bits_e            stop_bits_ctrl,
-  input  baud_rate_e            baud_rate_ctrl,
+  input  logic [15:0]           baud_div,
   input  logic [7:0]            deserialized_data,
 
 
@@ -25,7 +25,7 @@ module uart_rx_fsm (
   output data_size_e            latched_data_size,
   output parity_ctrl_e          latched_parity_ctrl,
   output stop_bits_e            latched_stop_bits,
-  output baud_rate_e            latched_baud_rate
+  output logic [15:0]           latched_baud_div
 );
 
   // FSM States
@@ -67,12 +67,12 @@ module uart_rx_fsm (
   data_size_e   latched_data_size_reg;
   parity_ctrl_e latched_parity_ctrl_reg;
   stop_bits_e   latched_stop_bits_reg;
-  baud_rate_e   latched_baud_rate_reg;
+  logic [15:0]  latched_baud_div_reg;
 
   assign latched_data_size   = latched_data_size_reg;
   assign latched_parity_ctrl = latched_parity_ctrl_reg;
   assign latched_stop_bits   = latched_stop_bits_reg;
-  assign latched_baud_rate   = latched_baud_rate_reg;
+  assign latched_baud_div    = latched_baud_div_reg;
 
   // Sample logic
   assign rx_in_sampled = rx_sync_1;
@@ -186,7 +186,7 @@ module uart_rx_fsm (
       latched_data_size_reg   <= DATA_8_BITS;
       latched_parity_ctrl_reg <= PARITY_NONE;
       latched_stop_bits_reg   <= STOP_1_BIT;
-      latched_baud_rate_reg   <= BAUD_19200;
+      latched_baud_div_reg    <= 16'd163;
     end else begin
       state <= next_state;
       
@@ -198,7 +198,7 @@ module uart_rx_fsm (
         latched_data_size_reg   <= data_size_ctrl;
         latched_parity_ctrl_reg <= parity_ctrl;
         latched_stop_bits_reg   <= stop_bits_ctrl;
-        latched_baud_rate_reg   <= baud_rate_ctrl;
+        latched_baud_div_reg    <= baud_div;
         parity_err_detected     <= 1'b0;
         framing_err_detected    <= 1'b0;
       end

@@ -34,7 +34,7 @@ add wave -noupdate -color {Pink} -itemcolor {Pink} -radix binary /tb_uart_top/u_
 add wave -noupdate -color {Pink} -itemcolor {Pink} /tb_uart_top/u_dut/data_size_ctrl
 add wave -noupdate -color {Pink} -itemcolor {Pink} /tb_uart_top/u_dut/parity_ctrl
 add wave -noupdate -color {Pink} -itemcolor {Pink} /tb_uart_top/u_dut/stop_bits_ctrl
-add wave -noupdate -color {Pink} -itemcolor {Pink} /tb_uart_top/u_dut/baud_rate_ctrl
+add wave -noupdate -color {Pink} -itemcolor {Pink} -radix unsigned /tb_uart_top/u_dut/baud_div
 add wave -noupdate -color {Pink} -itemcolor {Pink} /tb_uart_top/u_dut/tx_enable_ctrl
 add wave -noupdate -color {Pink} -itemcolor {Pink} /tb_uart_top/u_dut/rx_enable_ctrl
 
