@@ -1,0 +1,12 @@
+# Modelsim/QuestaSim temporary simulation directories & logs
+work/
+transcript
+vsim.wlf
+*.log
+*.db
+*.qdb
+*.qpg
+*.qtl
+*.vmake
+_info
+_opt/
