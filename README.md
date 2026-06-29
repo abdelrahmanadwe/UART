@@ -86,15 +86,38 @@ A comprehensive self-checking testbench is located in `tb/tb_uart_top.sv`. It ve
 7. High-speed transmission (115.2K).
 8. Data Overrun (DOR) logic and automatic flag clearing.
 
-### To Run Simulation:
+### To Run Simulation (Direct Testbench):
 Using **QuestaSim / ModelSim**:
 ```bash
-# Create library
-vlib work
+# Run direct testbench in CLI mode
+./run_tb_cli.sh
 
-# Compile all source files and testbench
-vlog rtl/common/uart_defs.sv rtl/common/baud_generator.sv rtl/uart_reg_file.sv rtl/rx/*.sv rtl/tx/*.sv rtl/uart_top.sv rtl/UART.sv tb/tb_uart_top.sv
-
-# Run simulation in CLI mode
-vsim -c -do "run -all; quit" tb_uart_top
+# Run direct testbench in GUI mode (opens Waveforms)
+./run_tb_gui.sh
 ```
+
+---
+
+## Advanced UVM Verification Environment
+
+We have built a complete, industry-standard **UVM Verification Environment** to thoroughly verify register mappings, loopback paths, and data overrun behaviors.
+
+For detailed UVM block diagrams, architecture details, and verification plans, please refer to the **[UVM Verification Environment Guide](file:///mnt/Local_Disk1/My_GitHub/Digital_Projects/UART/docs/uvm_verification_guide.md)**.
+
+### To Run UVM Tests:
+Make sure you have QuestaSim/ModelSim with UVM support sourced, and run:
+
+```bash
+# Run Loopback Test (CLI mode)
+./run_uvm_cli.sh uart_loopback_test
+
+# Run Register Access Test (CLI mode)
+./run_uvm_cli.sh uart_reg_access_test
+
+# Run Data Overrun (DOR) Test (CLI mode)
+./run_uvm_cli.sh uart_overrun_test
+
+# Run in GUI mode with waveforms
+./run_uvm_gui.sh [test_name]
+```
+
