@@ -1,6 +1,6 @@
-<mxfile host="app.diagrams.net" pages="4">
+<mxfile host="Electron" pages="4">
   <diagram id="t6aso9HCMV02g9S5t7b8" name="uart_tx">
-    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="876" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -93,7 +93,7 @@
             <mxPoint x="220" y="1.1368683772161603e-13" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="zsaOR-hlMIuG_GmJo6xY-14" edge="1" parent="CGbQcsnSKYgZH4fWPsb1-1" style="endArrow=classic;html=1;rounded=0;entryX=0.333;entryY=0.023;entryDx=0;entryDy=0;entryPerimeter=0;labelAutoRotate=1;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;baud_rate_ctrl [2:0]&lt;/font&gt;">
+        <mxCell id="zsaOR-hlMIuG_GmJo6xY-14" edge="1" parent="CGbQcsnSKYgZH4fWPsb1-1" style="endArrow=classic;html=1;rounded=0;entryX=0.333;entryY=0.023;entryDx=0;entryDy=0;entryPerimeter=0;labelAutoRotate=1;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;baud_div [15:0]&lt;/font&gt;">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
             <mxPoint as="offset" />
             <Array as="points" />
@@ -105,7 +105,7 @@
     </mxGraphModel>
   </diagram>
   <diagram id="z93_HfBmdfwaq7ZcTRTp" name="uart_rx">
-    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="876" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -195,7 +195,7 @@
             <mxPoint x="465" y="310.0000000000001" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="02ePYZox8J2khc47lEaz-13" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;entryX=0.333;entryY=0.023;entryDx=0;entryDy=0;entryPerimeter=0;labelAutoRotate=1;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;baud_rate_ctrl [2:0]&lt;/font&gt;">
+        <mxCell id="02ePYZox8J2khc47lEaz-13" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;entryX=0.333;entryY=0.023;entryDx=0;entryDy=0;entryPerimeter=0;labelAutoRotate=1;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;baud_div [15:0]&lt;/font&gt;">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
             <mxPoint as="offset" />
             <Array as="points" />
@@ -207,7 +207,7 @@
     </mxGraphModel>
   </diagram>
   <diagram id="Onh7E1bcr84c3Qdc4Qsh" name="uart_top">
-    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="876" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -256,7 +256,7 @@
             <mxPoint x="713.9655555555555" y="688.1395348837211" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="HOW1j47MjmYEc3yEuvv1-17" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;labelAutoRotate=1;startArrow=classic;startFill=1;endFill=0;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;baud_rate_ctrl [2:0]&lt;/font&gt;">
+        <mxCell id="HOW1j47MjmYEc3yEuvv1-17" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;labelAutoRotate=1;startArrow=classic;startFill=1;endFill=0;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;baud_div&amp;nbsp; [15:0]&lt;/font&gt;">
           <mxGeometry height="50" relative="1" width="50" x="0.1089" as="geometry">
             <mxPoint as="offset" />
             <Array as="points">
@@ -362,12 +362,12 @@
     </mxGraphModel>
   </diagram>
   <diagram id="1dfW83BwANcCCaFqeBQa" name="UART">
-    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1414" dy="876" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="I8eTV0-4AgSHoefJ7jmy-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#EBF3FB,#EBF3FB);fontColor=#1A1A1A;strokeColor=#006EAF;align=center;verticalAlign=top;labelPosition=center;verticalLabelPosition=middle;fontSize=40;container=0;labelBackgroundColor=#EBF3FB;" value="UART" vertex="1">
-          <mxGeometry height="520" width="840" x="230" y="720" as="geometry" />
+          <mxGeometry height="480" width="830" x="230" y="740" as="geometry" />
         </mxCell>
         <mxCell id="j4eIZaKzjw3ftdaR-TOg-5" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=light-dark(#EBF3FB,#EBF3FB);fontSize=18;" value="TX_P_DATA [7:0]">
           <mxGeometry relative="1" x="-0.0032" as="geometry">
@@ -438,7 +438,7 @@
             <mxPoint x="555.28" y="1130" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="I8eTV0-4AgSHoefJ7jmy-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#9FC4E9,#EBF3FB);fontColor=#000000;strokeColor=#006EAF;align=center;verticalAlign=top;labelPosition=center;verticalLabelPosition=middle;fontSize=40;container=0;labelBackgroundColor=light-dark(#9FC4E9,#EBF3FB);" value="uart_top" vertex="1">
+        <mxCell id="I8eTV0-4AgSHoefJ7jmy-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#9FC4E9,#EBF3FB);fontColor=#000000;strokeColor=#006EAF;align=center;verticalAlign=middle;labelPosition=center;verticalLabelPosition=middle;fontSize=40;container=0;labelBackgroundColor=light-dark(#9FC4E9,#EBF3FB);" value="uart_top" vertex="1">
           <mxGeometry height="310" width="240" x="780" y="880" as="geometry" />
         </mxCell>
         <mxCell id="I8eTV0-4AgSHoefJ7jmy-17" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;RX_IN&lt;/font&gt;">
@@ -489,7 +489,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="QNTDEHhj-rsZ1GRulF5F-1" edge="1" parent="1" source="j4eIZaKzjw3ftdaR-TOg-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=light-dark(#EBF3FB,#EBF3FB);fontSize=18;" target="I8eTV0-4AgSHoefJ7jmy-1" value="baud_rate_ctrl [2:0]">
+        <mxCell id="QNTDEHhj-rsZ1GRulF5F-1" edge="1" parent="1" source="j4eIZaKzjw3ftdaR-TOg-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=light-dark(#EBF3FB,#EBF3FB);fontSize=18;" target="I8eTV0-4AgSHoefJ7jmy-1" value="baud_div [15:0]">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="940" y="800" />
@@ -564,7 +564,7 @@
             <mxPoint x="40" y="960" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="j4eIZaKzjw3ftdaR-TOg-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#9FC4E9,#EBF3FB);fontColor=#000000;strokeColor=#006EAF;align=center;verticalAlign=top;labelPosition=center;verticalLabelPosition=middle;fontSize=40;container=0;labelBackgroundColor=light-dark(#9FC4E9,#EBF3FB);" value="Reg File" vertex="1">
+        <mxCell id="j4eIZaKzjw3ftdaR-TOg-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#9FC4E9,#EBF3FB);fontColor=#000000;strokeColor=#006EAF;align=center;verticalAlign=middle;labelPosition=center;verticalLabelPosition=middle;fontSize=40;container=0;labelBackgroundColor=light-dark(#9FC4E9,#EBF3FB);" value="Reg File" vertex="1">
           <mxGeometry height="430" width="285.28" x="270" y="770" as="geometry" />
         </mxCell>
         <mxCell id="5xfVpGOGYgI14bquBton-1" edge="1" parent="1" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;strokeWidth=2;endSize=6;startSize=6;sourcePerimeterSpacing=11;targetPerimeterSpacing=5;fontSize=22;width=35;" value="AMBA APB bus">
