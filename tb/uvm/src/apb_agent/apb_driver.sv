@@ -9,9 +9,6 @@ class apb_driver extends uvm_driver #(apb_seq_item);
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif)) begin
-      `uvm_fatal("APB_DRV", "Failed to get virtual interface vif from config DB")
-    end
   endfunction
 
   task run_phase(uvm_phase phase);

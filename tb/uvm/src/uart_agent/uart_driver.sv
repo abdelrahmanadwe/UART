@@ -3,7 +3,6 @@ class uart_driver extends uvm_driver #(uart_seq_item);
 
   virtual uart_serial_if vif;
   virtual apb_if        vif_apb; // Needed to get PCLK for timing
-  uvm_analysis_port #(uart_seq_item) ap;
 
   function new(string name = "uart_driver", uvm_component parent = null);
     super.new(name, parent);
@@ -11,13 +10,6 @@ class uart_driver extends uvm_driver #(uart_seq_item);
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    ap = new("ap", this);
-    if (!uvm_config_db#(virtual uart_serial_if)::get(this, "", "vif", vif)) begin
-      `uvm_fatal("UART_DRV", "Failed to get virtual interface vif from config DB")
-    end
-    if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif_apb", vif_apb)) begin
-      `uvm_fatal("UART_DRV", "Failed to get virtual interface vif_apb from config DB")
-    end
   endfunction
 
   task run_phase(uvm_phase phase);
@@ -30,7 +22,6 @@ class uart_driver extends uvm_driver #(uart_seq_item);
     forever begin
       seq_item_port.get_next_item(req);
       drive_serial_frame(req);
-      ap.write(req);
       seq_item_port.item_done();
     end
   endtask
@@ -79,18 +70,36 @@ class uart_driver extends uvm_driver #(uart_seq_item);
     end
 
     // 4. Stop Bits (High)
-    // First stop bit
     if (item.error_type == ERR_FRAMING) begin
-      vif.rx_serial <= 1'b0; // Force framing error
+      if (item.stop_bits == STOP_2_BITS) begin
+        // Randomly select which stop bit to corrupt
+        bit corrupt_first;
+        corrupt_first = $urandom_range(0, 1);
+        
+        if (corrupt_first) begin
+          vif.rx_serial <= 1'b0; // Corrupt first
+          repeat (bit_cycles) @(posedge vif_apb.PCLK);
+          vif.rx_serial <= 1'b1; // Second is normal
+          repeat (bit_cycles) @(posedge vif_apb.PCLK);
+        end else begin
+          vif.rx_serial <= 1'b1; // First is normal
+          repeat (bit_cycles) @(posedge vif_apb.PCLK);
+          vif.rx_serial <= 1'b0; // Corrupt second
+          repeat (bit_cycles) @(posedge vif_apb.PCLK);
+        end
+      end else begin
+        // Only 1 stop bit, corrupt it
+        vif.rx_serial <= 1'b0;
+        repeat (bit_cycles) @(posedge vif_apb.PCLK);
+      end
     end else begin
-      vif.rx_serial <= 1'b1;
-    end
-    repeat (bit_cycles) @(posedge vif_apb.PCLK);
-
-    // Second stop bit (if configured)
-    if (item.stop_bits == STOP_2_BITS) begin
+      // No error
       vif.rx_serial <= 1'b1;
       repeat (bit_cycles) @(posedge vif_apb.PCLK);
+      if (item.stop_bits == STOP_2_BITS) begin
+        vif.rx_serial <= 1'b1;
+        repeat (bit_cycles) @(posedge vif_apb.PCLK);
+      end
     end
   endtask
 

@@ -11,9 +11,6 @@ class apb_monitor extends uvm_monitor;
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
     ap = new("ap", this);
-    if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif)) begin
-      `uvm_fatal("APB_MON", "Failed to get virtual interface vif from config DB")
-    end
   endfunction
 
   task run_phase(uvm_phase phase);

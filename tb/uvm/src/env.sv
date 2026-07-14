@@ -46,6 +46,7 @@ class uart_env extends uvm_env;
   uart_agent        uart_agt;
   uart_scoreboard   scb;
   uart_reg_block    reg_model;
+  uart_coverage     cov;
 
   // RAL predictor to update mirror register values
   uvm_reg_predictor #(apb_seq_item) predictor;
@@ -63,6 +64,7 @@ class uart_env extends uvm_env;
     scb       = uart_scoreboard::type_id::create("scb", this);
     predictor = uvm_reg_predictor#(apb_seq_item)::type_id::create("predictor", this);
     adapter   = reg2apb_adapter::type_id::create("adapter");
+    cov       = uart_coverage::type_id::create("cov", this);
 
     // Retrieve or construct register model
     if (reg_model == null) begin
@@ -88,10 +90,14 @@ class uart_env extends uvm_env;
     uart_agt.monitor.reg_model = reg_model;
     scb.reg_model              = reg_model;
 
-    // Connect monitors & driver to scoreboard
+    // Connect monitors to scoreboard
     apb_agt.ap.connect(scb.apb_export);
-    uart_agt.monitor.ap.connect(scb.uart_tx_export);
-    uart_agt.driver.ap.connect(scb.uart_rx_export);
+    uart_agt.tx_ap.connect(scb.uart_tx_export);
+    uart_agt.rx_ap.connect(scb.uart_rx_export);
+
+    // Connect coverage collector
+    apb_agt.ap.connect(cov.apb_export);
+    cov.reg_model = reg_model;
   endfunction
 
 endclass

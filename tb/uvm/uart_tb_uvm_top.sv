@@ -69,6 +69,8 @@ module uart_tb_uvm_top;
       dummy_name = uart_reg_access_test::type_id::get().get_type_name();
       dummy_name = uart_loopback_test::type_id::get().get_type_name();
       dummy_name = uart_overrun_test::type_id::get().get_type_name();
+      dummy_name = uart_rand_test::type_id::get().get_type_name();
+      dummy_name = uart_illegal_rand_test::type_id::get().get_type_name();
     end
 
     // Run the UVM Test

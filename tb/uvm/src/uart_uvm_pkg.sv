@@ -5,6 +5,7 @@ package uart_uvm_pkg;
   `include "uvm_macros.svh"
 
   // 1. APB Agent files
+  `include "apb_agent/apb_agent_config.sv"
   `include "apb_agent/apb_seq_item.sv"
   typedef uvm_sequencer #(apb_seq_item) apb_sequencer;
   `include "apb_agent/apb_driver.sv"
@@ -12,6 +13,7 @@ package uart_uvm_pkg;
   `include "apb_agent/apb_agent.sv"
 
   // 2. UART Serial Agent files
+  `include "uart_agent/uart_agent_config.sv"
   `include "uart_agent/uart_seq_item.sv"
   typedef uvm_sequencer #(uart_seq_item) uart_sequencer;
   `include "uart_agent/uart_driver.sv"
@@ -20,6 +22,7 @@ package uart_uvm_pkg;
 
   // 3. Register Model
   `include "reg_model/uart_reg_block.sv"
+  `include "reg_model/uart_coverage.sv"
 
   // 4. Scoreboard
   `include "scoreboard.sv"

@@ -7,7 +7,8 @@ class uart_monitor extends uvm_monitor;
   // Handle to UVM Register Model (mirrored config values)
   uvm_reg_block         reg_model;
 
-  uvm_analysis_port #(uart_seq_item) ap;
+  uvm_analysis_port #(uart_seq_item) tx_ap;
+  uvm_analysis_port #(uart_seq_item) rx_ap;
 
   function new(string name = "uart_monitor", uvm_component parent = null);
     super.new(name, parent);
@@ -15,16 +16,19 @@ class uart_monitor extends uvm_monitor;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    ap = new("ap", this);
-    if (!uvm_config_db#(virtual uart_serial_if)::get(this, "", "vif", vif)) begin
-      `uvm_fatal("UART_MON", "Failed to get virtual interface vif from config DB")
-    end
-    if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif_apb", vif_apb)) begin
-      `uvm_fatal("UART_MON", "Failed to get virtual interface vif_apb from config DB")
-    end
+    tx_ap = new("tx_ap", this);
+    rx_ap = new("rx_ap", this);
   endfunction
 
   task run_phase(uvm_phase phase);
+    @(posedge vif_apb.PRESETn);
+    fork
+      monitor_tx();
+      monitor_rx();
+    join
+  endtask
+
+  task monitor_tx();
     uart_seq_item item;
     data_size_e   size;
     parity_ctrl_e parity;
@@ -32,8 +36,6 @@ class uart_monitor extends uvm_monitor;
     bit [15:0]    baud_div;
     int           bit_cycles;
     int           num_bits;
-
-    @(posedge vif_apb.PRESETn);
 
     forever begin
       // Wait for start bit (falling edge on tx_serial)
@@ -89,7 +91,74 @@ class uart_monitor extends uvm_monitor;
       end
 
       // Publish decoded transaction to scoreboard
-      ap.write(item);
+      tx_ap.write(item);
+    end
+  endtask
+
+  task monitor_rx();
+    uart_seq_item item;
+    data_size_e   size;
+    parity_ctrl_e parity;
+    stop_bits_e   stop;
+    bit [15:0]    baud_div;
+    int           bit_cycles;
+    int           num_bits;
+
+    forever begin
+      // Wait for start bit (falling edge on rx_serial)
+      @(negedge vif.rx_serial);
+      
+      // Read current dynamic configuration
+      get_config(size, parity, stop, baud_div);
+      bit_cycles = int'(baud_div) * 16;
+      
+      case (size)
+        DATA_5_BITS: num_bits = 5;
+        DATA_6_BITS: num_bits = 6;
+        DATA_7_BITS: num_bits = 7;
+        DATA_8_BITS: num_bits = 8;
+        default:     num_bits = 8;
+      endcase
+
+      // Wait 1.5 bit periods to sample first data bit (LSB)
+      repeat (bit_cycles + (bit_cycles / 2)) @(posedge vif_apb.PCLK);
+
+      item = uart_seq_item::type_id::create("item");
+      item.data_size   = size;
+      item.parity_ctrl = parity;
+      item.stop_bits   = stop;
+      item.baud_div    = baud_div;
+      item.data        = 8'h0;
+      item.error_type  = ERR_NONE;
+
+      // Sample data bits
+      for (int i = 0; i < num_bits; i++) begin
+        item.data[i] = vif.rx_serial;
+        repeat (bit_cycles) @(posedge vif_apb.PCLK);
+      end
+
+      // Sample parity bit (if enabled)
+      if (parity == PARITY_EVEN || parity == PARITY_ODD) begin
+        bit parity_sampled;
+        bit parity_expected;
+        parity_sampled = vif.rx_serial;
+        parity_expected = ^item.data;
+        if (parity == PARITY_ODD) begin
+          parity_expected = ~parity_expected;
+        end
+        if (parity_sampled !== parity_expected) begin
+          item.error_type = ERR_PARITY;
+        end
+        repeat (bit_cycles) @(posedge vif_apb.PCLK);
+      end
+
+      // Sample first stop bit
+      if (vif.rx_serial !== 1'b1) begin
+        item.error_type = ERR_FRAMING;
+      end
+
+      // Publish decoded transaction to scoreboard
+      rx_ap.write(item);
     end
   endtask
 
