@@ -39,6 +39,8 @@ class apb_monitor extends uvm_monitor;
         end
 
         ap.write(trans);
+        `uvm_info("APB_MON_TRACK", $sformatf("Time=%0t PADDR=%h PWRITE=%b PWDATA=%h PRDATA=%h PREADY=1 PSLVERR=%b",
+                  $time, trans.addr, trans.write, trans.wdata, trans.rdata, trans.slverr), UVM_HIGH)
       end
     end
   endtask

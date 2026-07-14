@@ -77,14 +77,6 @@ module uart_tb_uvm_top;
     run_test();
   end
 
-  // Debug APB bus tracker
-  initial begin
-    forever @(posedge clk) begin
-      if (apb_vif.PSEL) begin
-        $display("[TB_APB] Time=%0t PADDR=%h PWRITE=%b PSEL=%b PENABLE=%b PWDATA=%h PRDATA=%h PREADY=%b",
-                 $time, apb_vif.PADDR, apb_vif.PWRITE, apb_vif.PSEL, apb_vif.PENABLE, apb_vif.PWDATA, apb_vif.PRDATA, apb_vif.PREADY);
-      end
-    end
-  end
+
 
 endmodule

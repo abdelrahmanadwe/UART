@@ -56,6 +56,9 @@ class apb_driver extends uvm_driver #(apb_seq_item);
     end
     item.slverr = vif.cb.PSLVERR;
 
+    `uvm_info("APB_DRV_TRACK", $sformatf("Time=%0t PADDR=%h PWRITE=%b PWDATA=%h PRDATA=%h PREADY=%b PSLVERR=%b",
+              $time, item.addr, item.write, item.wdata, item.rdata, vif.cb.PREADY, item.slverr), UVM_HIGH)
+
     // Clean up
     vif.cb.PSEL    <= 1'b0;
     vif.cb.PENABLE <= 1'b0;
