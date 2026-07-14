@@ -119,6 +119,7 @@ class uart_loopback_vseq extends uart_vseq_base;
     // cfg register: 10'h318 (8-bit data size, no parity, 1 stop bit, tx/rx enabled)
     reg_model.cfg.write(status, 32'h318, .parent(this));
     reg_model.baud_div.write(status, 32'd163, .parent(this));
+    reg_model.ier.write(status, 32'h1, .parent(this)); // Enable tx_done interrupt
 
     // 2. Test APB-to-Serial Transmitter (TX) Path
     // Write 8'hA5 to TX_DATA over APB
@@ -131,6 +132,7 @@ class uart_loopback_vseq extends uart_vseq_base;
       #100ns;
     end
     #200000ns; // Wait for receiver loopback to finish processing
+    reg_model.status.write(status, 32'h1, .parent(this)); // Clear tx_done interrupt
 
     // 3. Test Serial-to-APB Receiver (RX) Path
     // Drive serial frame (8'h5A) onto rx_serial using UART Serial Agent
@@ -286,8 +288,13 @@ class uart_rand_vseq extends uart_vseq_base;
         `uvm_error("VSEQ_RAND_ERR", "BAUD_DIV register randomization failed")
       end
 
+      if (!reg_model.ier.randomize()) begin
+        `uvm_error("VSEQ_RAND_ERR", "IER register randomization failed")
+      end
+
       reg_model.cfg.update(status, .parent(this));
       reg_model.baud_div.update(status, .parent(this));
+      reg_model.ier.update(status, .parent(this));
       
       // Clear status flags
       reg_model.status.write(status, 32'h3F, .parent(this));
@@ -304,6 +311,7 @@ class uart_rand_vseq extends uart_vseq_base;
         #100ns;
       end
       #150000ns; // Wait for transmission to propagate through monitor
+      reg_model.status.write(status, 32'h3F, .parent(this)); // Clear interrupts
 
       // 3. Perform a serial RX drive and verify reception
       rand_data = $urandom;

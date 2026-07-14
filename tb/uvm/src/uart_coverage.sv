@@ -59,6 +59,7 @@ class uart_coverage extends uvm_component;
     cp_intr_parity_err:   coverpoint parity_error;
     cp_intr_framing_err:  coverpoint framing_error;
     cp_intr_rx_done:      coverpoint rx_done;
+    cp_intr_tx_ready:     coverpoint tx_ready;
     cp_intr_overrun_err:  coverpoint overrun_error;
   endgroup
 
@@ -105,6 +106,7 @@ class uart_coverage extends uvm_component;
         parity_error  = status_val[1];
         framing_error = status_val[2];
         rx_done       = status_val[3];
+        tx_ready      = status_val[4];
         overrun_error = status_val[5];
         cg_interrupts.sample();
       end

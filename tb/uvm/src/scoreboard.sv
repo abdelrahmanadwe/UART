@@ -19,6 +19,13 @@ class uart_scoreboard extends uvm_scoreboard;
   // Handle to UVM Register Model
   uart_reg_block reg_model;
 
+  // Virtual interface handle for interrupts
+  virtual uart_intr_if intr_vif;
+
+  // Counters for verifying irq_tx_done interrupt against APB writes
+  int tx_write_count = 0;
+  int tx_done_intr_count = 0;
+
   function new(string name = "uart_scoreboard", uvm_component parent = null);
     super.new(name, parent);
   endfunction
@@ -28,7 +35,21 @@ class uart_scoreboard extends uvm_scoreboard;
     apb_export     = new("apb_export",     this);
     uart_tx_export = new("uart_tx_export", this);
     uart_rx_export = new("uart_rx_export", this);
+
+    // Retrieve interrupt virtual interface
+    if (!uvm_config_db#(virtual uart_intr_if)::get(this, "", "vif", intr_vif)) begin
+      `uvm_fatal("SCB_CFG_ERR", "Could not get handle to interrupt virtual interface intr_vif!")
+    end
   endfunction
+
+  // Monitor rising edge of irq_tx_done in run_phase
+  virtual task run_phase(uvm_phase phase);
+    forever begin
+      @(posedge intr_vif.irq_tx_done);
+      tx_done_intr_count++;
+      `uvm_info("SCB_INTR_CHECK", $sformatf("Detected posedge on irq_tx_done! Counter = %0d", tx_done_intr_count), UVM_MEDIUM)
+    end
+  endtask
 
   // APB Transaction Monitor write implementation
   function void write_apb(apb_seq_item trans);
@@ -36,9 +57,15 @@ class uart_scoreboard extends uvm_scoreboard;
     if (trans.write && trans.addr == 5'h0C) begin
       // Verify tx_enable is active
       bit [31:0] cfg_val = reg_model.cfg.get_mirrored_value();
+      bit [31:0] ier_val = reg_model.ier.get_mirrored_value();
       if (cfg_val[8] == 1'b1) begin // tx_enable is bit 8
         `uvm_info("SCB_TX", $sformatf("Expected TX Byte written to APB: %h", trans.wdata[7:0]), UVM_MEDIUM)
         tx_expected_q.push_back(trans.wdata[7:0]);
+        // Increment the TX write counter ONLY if the tx_done interrupt is enabled (IER[0] == 1)
+        if (ier_val[0] == 1'b1) begin
+          tx_write_count++;
+          `uvm_info("SCB_INTR_CHECK", $sformatf("Incremented tx_write_count = %0d", tx_write_count), UVM_MEDIUM)
+        end
       end
     end
 
@@ -108,6 +135,14 @@ class uart_scoreboard extends uvm_scoreboard;
     end
     if (rx_expected_q.size() != 0) begin
       `uvm_warning("SCB_CHECK_PHASE", $sformatf("Simulation ended, but rx_expected_q is not empty! Remaining: %0d", rx_expected_q.size()))
+    end
+
+    // Verify that the number of tx_done interrupts matches the number of enabled TX writes
+    `uvm_info("SCB_CHECK_PHASE", $sformatf("Comparing interrupt counters: tx_write_count=%0d, tx_done_intr_count=%0d", tx_write_count, tx_done_intr_count), UVM_MEDIUM)
+    if (tx_write_count != tx_done_intr_count) begin
+      `uvm_error("SCB_INTR_MISMATCH", $sformatf("Interrupt verification failed! Number of enabled TX writes (%0d) does not match irq_tx_done counts (%0d)", tx_write_count, tx_done_intr_count))
+    end else begin
+      `uvm_info("SCB_INTR_VERIFIED", $sformatf("Interrupt verification successful! Enabled TX writes and irq_tx_done counts match: %0d", tx_done_intr_count), UVM_MEDIUM)
     end
   endfunction
 

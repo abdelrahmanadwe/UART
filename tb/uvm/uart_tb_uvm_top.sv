@@ -30,7 +30,7 @@ module uart_tb_uvm_top;
   // Instantiate Virtual Interfaces
   apb_if          apb_vif (clk, rst_n);
   uart_serial_if  serial_vif ();
-  uart_intr_if    intr_vif ();
+  uart_intr_if    intr_vif (clk, rst_n);
 
   // Instantiate DUT (Top wrapper with APB interface)
   UART u_dut (
