@@ -5,7 +5,7 @@ if [file exists work] {
 vlib work
 
 # Compile with code coverage enabled (statement, branch, condition, expression, finite state machine)
-vlog -cover sbcef +incdir+/home/abdelrahman-adwe/questasim/verilog_src/uvm-1.1d/src -f sim/listfiles/flist_uvm.f
+vlog -cover sbcef -f sim/listfiles/flist_uvm.f
 
 # Set defaults
 set test_name "uart_loopback_test"

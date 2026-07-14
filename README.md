@@ -6,17 +6,18 @@ A highly configurable digital Universal Asynchronous Receiver-Transmitter (UART)
 
 ## Features
 
-- **APB Interface Compliance**: Integrates seamlessly into modern SoC interconnects using standard PCLK, PRESETn, PADDR, PSEL, PENABLE, PWRITE, PWDATA, PREADY, PRDATA, and PSLVERR.
+- **APB Interface Compliance**: Integrates seamlessly into modern SoC interconnects using standard `PCLK`, `PRESETn`, `PADDR`, `PSEL`, `PENABLE`, `PWRITE`, `PWDATA`, `PREADY`, `PRDATA`, and `PSLVERR`.
 - **Hardware-Level Configuration Gating**:
   - Independent **TX Enable** and **RX Enable** controls (default to disabled on reset to prevent accidental transmissions/receptions).
 - **Flexible Frame Format**:
   - **Baud Rate**: Programmable (2400, 4800, 9600, 19200, 115200).
   - **Data Size**: Configurable (5, 6, 7, or 8 bits).
   - **Stop Bits**: Configurable (1 or 2 stop bits).
-  - **Parity Mode**: Disabled, Even, or Odd (standard AVR Atmega Table 64 mapping).
-- **Advanced Interrupt Controller**:
+  - **Parity Mode**: Disabled, Even, or Odd.
+- **Combined STATUS & Interrupt Controller**:
+  - A single consolidated **STATUS** register at `0x04` combines both status flags and raw interrupt sources, mimicking modern microcontroller registers (like STM32 `USART_SR`).
   - Exposes dedicated level and edge-triggered masked interrupt pins:
-    - `irq_tx_ready` (Level-sensitive Transmit Buffer Empty / UDRE)
+    - `irq_tx_ready` (Level-sensitive Transmit Buffer Empty)
     - `irq_tx_done` (Edge-triggered Transmit Complete)
     - `irq_rx_done` (Edge-triggered Receive Complete)
     - `irq_rx_parity` (Parity Error)
@@ -35,26 +36,35 @@ A highly configurable digital Universal Asynchronous Receiver-Transmitter (UART)
 ```text
 UART/
 ├── docs/
-│   └── register_map.md       # Complete CSR documentation, offsets, and bit fields
+│   ├── register_map.md           # Complete CSR documentation, offsets, and bit fields
+│   └── uvm_verification_guide.md # UVM verification environment design guide
 ├── rtl/
 │   ├── common/
-│   │   ├── uart_defs.sv      # Shared definitions and config enums
-│   │   └── baud_generator.sv # Configurable baud clock dividers
+│   │   ├── uart_defs.sv          # Shared definitions and config enums
+│   │   └── baud_generator.sv     # Configurable baud clock dividers
 │   ├── rx/
 │   │   ├── uart_rx_deserializer.sv
 │   │   ├── uart_rx_fsm.sv
-│   │   └── uart_rx.sv        # Complete receiver core
+│   │   └── uart_rx.sv            # Complete receiver core
 │   ├── tx/
 │   │   ├── uart_tx_parity.sv
 │   │   ├── uart_tx_serializer.sv
 │   │   ├── uart_tx_fsm.sv
-│   │   └── uart_tx.sv        # Complete transmitter core
-│   ├── uart_top.sv           # Digital core top (TX + RX combined)
-│   ├── uart_reg_file.sv      # Control Status Registers (CSRs) & APB bridge
-│   └── UART.sv               # Top-level wrapper (APB + Digital Top)
+│   │   └── uart_tx.sv            # Complete transmitter core
+│   ├── uart_top.sv               # Digital core top (TX + RX combined)
+│   ├── uart_reg_file.sv          # Control Status Registers (CSRs) & APB bridge
+│   └── UART.sv                   # Top-level wrapper (APB + Digital Top)
 ├── tb/
-│   └── tb_uart_top.sv        # Comprehensive testbench with 6 verification test cases
-└── README.md                 # This file
+│   └── uvm/                      # Complete UVM 1.1d verification testbench
+│       ├── interfaces/           # SystemVerilog interfaces (apb_if, uart_serial_if, uart_intr_if)
+│       ├── src/                  # UVM package source files (env, agents, sequences, scoreboard)
+│       └── uart_tb_uvm_top.sv    # Top-level testbench wrapper
+├── sim/                          # Simulation outputs, logs, and compile listfiles
+├── clean.sh                      # Utility script to clean compile databases and simulation logs
+├── run_uvm_cli.sh                # Script to run UVM tests in Command-Line mode
+├── run_uvm_gui.sh                # Script to run UVM tests in Graphic GUI mode (opens waves)
+├── run_uvm_regression.sh         # Script to run all UVM tests, merge coverage, and report results
+└── README.md                     # This file
 ```
 
 ---
@@ -62,13 +72,13 @@ UART/
 ## Register Map Summary
 
 Base address offsets:
-- `0x00` — **CFG** (Configuration Register, reset value `10'h1B`)
-- `0x04` — **STATUS** (Status Register, Read-Only, reset value `32'h1`)
-- `0x08` — **RIS** (Raw Interrupt Status, W1C/RO, reset value `32'h10`)
-- `0x0C` — **IER** (Interrupt Enable Register, RW, reset value `32'h0`)
-- `0x10` — **MIS** (Masked Interrupt Status, Read-Only, reset value `32'h0`)
-- `0x14` — **TX_DATA** (Transmit Data, Write-Only)
-- `0x18` — **RX_DATA** (Receive Data, Read-Only, auto-clears status flags on read)
+- `0x00` — **CFG** (Configuration Register, reset value `10'h18`)
+- `0x04` — **STATUS** (Consolidated status and raw interrupt flags, W1C/RO, reset value `32'h10`)
+- `0x08` — **IER** (Interrupt Enable Register, RW, reset value `32'h0`)
+- `0x0C` — **TX_DATA** (Transmit Data, Write-Only)
+- `0x10` — **RX_DATA** (Receive Data, Read-Only, auto-clears status/interrupt flags on read)
+- `0x14` — **BAUD_DIV** (Baud rate divisor register, RW, reset value `16'd163`)
+- `0x18` to `0x1C` — **Reserved / Unmapped** (Triggers APB `PSLVERR` bus error on access)
 
 For detailed descriptions of registers and bit maps, refer to [docs/register_map.md](file:///mnt/Local_Disk1/My_GitHub/Digital_Projects/UART/docs/register_map.md).
 
@@ -76,48 +86,36 @@ For detailed descriptions of registers and bit maps, refer to [docs/register_map
 
 ## Verification & Simulation
 
-A comprehensive self-checking testbench is located in `tb/tb_uart_top.sv`. It verifies:
-1. Gating of TX/RX enables.
-2. Standard configurations (8-N-1 at 19.2K).
-3. Frame configs (5-bit, Odd parity, 2 stop bits).
-4. Edge interrupts and W1C capability.
-5. Level-sensitive `tx_ready` interrupt behavior.
-6. Back-to-back writes without buffer data loss.
-7. High-speed transmission (115.2K).
-8. Data Overrun (DOR) logic and automatic flag clearing.
+The IP is fully verified using an industry-standard **UVM 1.1d Verification Environment** with code and functional coverage merged and analyzed.
 
-### To Run Simulation (Direct Testbench):
-Using **QuestaSim / ModelSim**:
+### Run Regression & Coverage:
+To compile the design, run all test scenarios, merge the coverage databases, and generate a unified coverage report, run:
 ```bash
-# Run direct testbench in CLI mode
-./run_tb_cli.sh
+./run_uvm_regression.sh
+```
+This script executes the following test suite:
+1. `uart_reg_access_test`: Verifies register read/write, default reset values, and illegal register address access error logging.
+2. `uart_loopback_test`: Verifies back-to-back APB character write, transmission status flags, loopback to RX, and scoreboard checks.
+3. `uart_overrun_test`: Injects overlapping serial bytes to verify Data Overrun (DOR) hardware flags and automatic clearing behaviors.
+4. `uart_rand_test`: Applies 90 iterations of fully randomized configurations (data size, stop bits, parity, speeds) to verify legal transmission correctness.
+5. `uart_illegal_rand_test`: Exercises boundary conditions, illegal baud divisor = 0, invalid configurations, framing errors, parity errors, and unmapped register PSLVERR assertions.
 
-# Run direct testbench in GUI mode (opens Waveforms)
-./run_tb_gui.sh
+### Run Single UVM Test in CLI:
+```bash
+./run_uvm_cli.sh <test_name> [verbosity]
+# Example:
+./run_uvm_cli.sh uart_rand_test UVM_MEDIUM
 ```
 
----
-
-## Advanced UVM Verification Environment
-
-We have built a complete, industry-standard **UVM Verification Environment** to thoroughly verify register mappings, loopback paths, and data overrun behaviors.
-
-For detailed UVM block diagrams, architecture details, and verification plans, please refer to the **[UVM Verification Environment Guide](file:///mnt/Local_Disk1/My_GitHub/Digital_Projects/UART/docs/uvm_verification_guide.md)**.
-
-### To Run UVM Tests:
-Make sure you have QuestaSim/ModelSim with UVM support sourced, and run:
-
+### Run UVM Test in GUI Mode:
+To inspect waveforms, open the Questasim GUI, and load signals, run:
 ```bash
-# Run Loopback Test (CLI mode)
-./run_uvm_cli.sh uart_loopback_test
-
-# Run Register Access Test (CLI mode)
-./run_uvm_cli.sh uart_reg_access_test
-
-# Run Data Overrun (DOR) Test (CLI mode)
-./run_uvm_cli.sh uart_overrun_test
-
-# Run in GUI mode with waveforms
-./run_uvm_gui.sh [test_name]
+./run_uvm_gui.sh <test_name> [verbosity]
+# Example:
+./run_uvm_gui.sh uart_loopback_test
 ```
 
+### Verification Highlights:
+- **Scoreboard Interrupt Counter:** The scoreboard (`uart_scoreboard`) hooks into `uart_intr_if` to count active enabled writes to `TX_DATA` and verify that they match the exact count of rising edges on the `irq_tx_done` interrupt pin at the end of the simulation.
+- **Interrupt SVA Assertion:** A concurrent SystemVerilog Assertion inside the `uart_intr_if` interface validates that whenever any individual interrupt flag is raised, the main top-level `irq` pin must also be raised on the clock cycle.
+- **Coverage Collection:** Independent covergroups cover configuration settings, status flag combinations, and raw status interrupt transitions to achieve **100.00%** functional coverage.
