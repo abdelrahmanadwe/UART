@@ -7,7 +7,6 @@ import uvm_pkg::*;
 `include "uart_reg_status.sv"
 `include "uart_reg_ris.sv"
 `include "uart_reg_ier.sv"
-`include "uart_reg_mis.sv"
 `include "uart_reg_tx_data.sv"
 `include "uart_reg_rx_data.sv"
 
@@ -21,7 +20,6 @@ class uart_reg_block extends uvm_reg_block;
   uart_reg_status       status;
   uart_reg_ris          ris;
   rand uart_reg_ier     ier;
-  uart_reg_mis          mis;
   rand uart_reg_tx_data tx_data;
   uart_reg_rx_data      rx_data;
   rand uart_reg_baud_div baud_div;
@@ -49,10 +47,6 @@ class uart_reg_block extends uvm_reg_block;
     ier.configure(this);
     ier.build();
 
-    mis = uart_reg_mis::type_id::create("mis");
-    mis.configure(this);
-    mis.build();
-
     tx_data = uart_reg_tx_data::type_id::create("tx_data");
     tx_data.configure(this);
     tx_data.build();
@@ -74,7 +68,6 @@ class uart_reg_block extends uvm_reg_block;
     default_map.add_reg(status,  'h04, "RO");
     default_map.add_reg(ris,     'h08, "RW"); // W1C registers are set as RW in map to allow writing 1 to clear
     default_map.add_reg(ier,     'h0C, "RW");
-    default_map.add_reg(mis,     'h10, "RO");
     default_map.add_reg(tx_data, 'h14, "WO");
     default_map.add_reg(rx_data, 'h18, "RO");
     default_map.add_reg(baud_div, 'h1C, "RW");

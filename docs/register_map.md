@@ -16,7 +16,7 @@ This document describes the memory-mapped register interface of the UART periphe
 | `0x04` | [STATUS](#0x04--status--status-register) | RO | `0x0000_0001` | TX ready and RX data available status flags. |
 | `0x08` | [RIS](#0x08--ris--raw-interrupt-status) | RW1C / RO | `0x0000_0010` | Raw (unmasked) interrupt event flags. Bit 4 is level-sensitive (RO), bits [3:0] are W1C. |
 | `0x0C` | [IER](#0x0c--ier--interrupt-enable-register) | RW | `0x0000_0000` | Interrupt enable masks. |
-| `0x10` | [MIS](#0x10--mis--masked-interrupt-status) | RO | `0x0000_0000` | Masked interrupt status (RIS AND IER). |
+| `0x10` | — | — | — | **Reserved / Unmapped** (Triggers `PSLVERR` on access). |
 | `0x14` | [TX_DATA](#0x14--tx_data--transmit-data-register) | WO | `0x0000_0000` | Data byte to transmit. |
 | `0x18` | [RX_DATA](#0x18--rx_data--receive-data-register) | RO | `0x0000_0000` | Last received data byte. Reading clears `STATUS.rx_valid` and `RIS.rx_done`. |
 | `0x1C` | [BAUD_DIV](#0x1c--baud_div--baud-rate-divisor-register) | RW | `0x0000_00A3` | Baud rate divisor value. |
@@ -113,32 +113,22 @@ Controls which raw interrupt events are allowed to propagate to the masked inter
 
 ---
 
-### `0x10` — MIS (Masked Interrupt Status)
+### `0x10` — Reserved / Unmapped Offset
 
-Read-only register showing the currently active, unmasked interrupts. Computed combinationally as: **`MIS = RIS & IER`**.
+This offset is reserved. Any read or write access to this address will fail and trigger a bus error (`PSLVERR` is asserted).
 
-| Bits | Field | Access | Reset | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `[0]` | `tx_done_mis` | RO | `0` | `1` if `tx_done` is both set (RIS) and enabled (IER). |
-| `[1]` | `parity_error_mis` | RO | `0` | `1` if `parity_error` is both set and enabled. |
-| `[2]` | `framing_error_mis` | RO | `0` | `1` if `framing_error` is both set and enabled. |
-| `[3]` | `rx_done_mis` | RO | `0` | `1` if `rx_done` is both set (RIS) and enabled (IER). |
-| `[4]` | `tx_ready_mis` | RO | `0` | `1` if `tx_ready` is both active (RIS) and enabled (IER). |
-| `[5]` | `overrun_error_mis` | RO | `0` | `1` if `overrun_error` is both set (RIS) and enabled (IER). |
-| `[31:6]` | — | — | `0` | Reserved. |
+The individual masked interrupt statuses (computed combinationally as `intr_mask = RIS & IER`) are still routed directly to output pins at the top level for system-level routing, but are not readable via the APB register interface:
 
-Each bit of MIS is also routed to a dedicated output pin at the top level:
-
-| MIS Bit | Output Pin |
+| Masked Interrupt Bit | Output Pin |
 | :--- | :--- |
-| `[0]` | `irq_tx_done` |
-| `[1]` | `irq_rx_parity` |
-| `[2]` | `irq_rx_framing` |
-| `[3]` | `irq_rx_done` |
-| `[4]` | `irq_tx_ready` |
-| `[5]` | `irq_rx_overrun` |
+| `tx_done` enabled | `irq_tx_done` |
+| `parity_error` enabled | `irq_rx_parity` |
+| `framing_error` enabled | `irq_rx_framing` |
+| `rx_done` enabled | `irq_rx_done` |
+| `tx_ready` enabled | `irq_tx_ready` |
+| `overrun_error` enabled | `irq_rx_overrun` |
 
-The global `irq` output is the logical OR of all MIS bits: **`irq = |MIS`**.
+The global `irq` output pin is the logical OR of all active enabled interrupts: **`irq = |(RIS & IER)`**.
 
 ---
 

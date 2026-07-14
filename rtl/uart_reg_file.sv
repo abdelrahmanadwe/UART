@@ -65,7 +65,6 @@ module uart_reg_file (
                       (PADDR == ADDR_STATUS) ||
                       (PADDR == ADDR_INTR_RAW) ||
                       (PADDR == ADDR_INTR_EN) ||
-                      (PADDR == ADDR_INTR_MASK) ||
                       (PADDR == ADDR_TX_DATA) ||
                       (PADDR == ADDR_RX_DATA) ||
                       (PADDR == ADDR_BAUD_DIV);
@@ -266,7 +265,6 @@ module uart_reg_file (
       ADDR_STATUS:    PRDATA = {29'b0, dor_reg, rx_valid_status, tx_ready_reg_file};
       ADDR_INTR_RAW:  PRDATA = {26'b0, intr_raw_reg};
       ADDR_INTR_EN:   PRDATA = {26'b0, intr_en_reg};
-      ADDR_INTR_MASK: PRDATA = {26'b0, intr_mask_reg};
       ADDR_RX_DATA:   PRDATA = {24'b0, rx_data_reg};
       ADDR_BAUD_DIV:  PRDATA = {16'b0, baud_div_reg};
       default:        PRDATA = 32'b0;
