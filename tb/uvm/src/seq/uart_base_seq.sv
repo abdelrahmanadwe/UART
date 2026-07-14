@@ -2,58 +2,48 @@ import uvm_pkg::*;
 `include "uvm_macros.svh"
 
 // -----------------------------------------------------------------------------
-// Base APB Sequence
+// Base UART Serial Sequence
 // -----------------------------------------------------------------------------
-class apb_base_seq extends uvm_sequence #(apb_seq_item);
-  `uvm_object_utils(apb_base_seq)
+class uart_base_seq extends uvm_sequence #(uart_seq_item);
+  `uvm_object_utils(uart_base_seq)
 
-  function new(string name = "apb_base_seq");
+  function new(string name = "uart_base_seq");
     super.new(name);
   endfunction
 endclass
 
 // -----------------------------------------------------------------------------
-// Raw APB Write Sequence
+// Standard UART Serial Transmission Sequence
 // -----------------------------------------------------------------------------
-class apb_write_seq extends apb_base_seq;
-  `uvm_object_utils(apb_write_seq)
+class uart_send_frame_seq extends uart_base_seq;
+  `uvm_object_utils(uart_send_frame_seq)
 
-  rand bit [4:0]  addr;
-  rand bit [31:0] data;
+  rand bit [7:0]        data;
+  rand data_size_e      data_size;
+  rand parity_ctrl_e    parity_ctrl;
+  rand stop_bits_e      stop_bits;
+  rand bit [15:0]       baud_div;
+  rand uart_error_e     error_type;
 
-  function new(string name = "apb_write_seq");
+  function new(string name = "uart_send_frame_seq");
     super.new(name);
+    // Defaults matching standard configuration
+    data_size   = DATA_8_BITS;
+    parity_ctrl = PARITY_NONE;
+    stop_bits   = STOP_1_BIT;
+    baud_div    = 16'd163;
+    error_type  = ERR_NONE;
   endfunction
 
   task body();
-    req = apb_seq_item::type_id::create("req");
+    req = uart_seq_item::type_id::create("req");
     start_item(req);
-    req.addr  = addr;
-    req.write = 1'b1;
-    req.wdata = data;
+    req.data        = data;
+    req.data_size   = data_size;
+    req.parity_ctrl = parity_ctrl;
+    req.stop_bits   = stop_bits;
+    req.baud_div    = baud_div;
+    req.error_type  = error_type;
     finish_item(req);
-  endtask
-endclass
-
-// -----------------------------------------------------------------------------
-// Raw APB Read Sequence
-// -----------------------------------------------------------------------------
-class apb_read_seq extends apb_base_seq;
-  `uvm_object_utils(apb_read_seq)
-
-  rand bit [4:0]  addr;
-  bit [31:0]      data;
-
-  function new(string name = "apb_read_seq");
-    super.new(name);
-  endfunction
-
-  task body();
-    req = apb_seq_item::type_id::create("req");
-    start_item(req);
-    req.addr  = addr;
-    req.write = 1'b0;
-    finish_item(req);
-    data = req.rdata;
   endtask
 endclass
