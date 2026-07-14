@@ -86,7 +86,7 @@ class uart_coverage extends uvm_component;
       end
 
       // Sample BAUD_DIV
-      if (trans.write && trans.addr == 5'h14) begin
+      if (trans.write && trans.addr == 5'h10) begin
         baud_div = trans.wdata[15:0];
         cg_cfg.sample();
       end

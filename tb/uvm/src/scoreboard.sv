@@ -70,7 +70,7 @@ class uart_scoreboard extends uvm_scoreboard;
     end
 
     // RX Data Read
-    if (!trans.write && trans.addr == 5'h10) begin
+    if (!trans.write && trans.addr == 5'h0C) begin
       `uvm_info("SCB_RX", $sformatf("Read RX Byte from APB: %h", trans.rdata[7:0]), UVM_MEDIUM)
       if (rx_expected_q.size() == 0) begin
         `uvm_error("SCB_RX_ERR", $sformatf("Read RX Data %h from APB, but rx_expected_q is empty!", trans.rdata[7:0]))

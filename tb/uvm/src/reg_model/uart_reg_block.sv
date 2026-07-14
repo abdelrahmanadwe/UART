@@ -62,8 +62,8 @@ class uart_reg_block extends uvm_reg_block;
     default_map.add_reg(status,  'h04, "RW"); // Raw status register with W1C bits
     default_map.add_reg(ier,     'h08, "RW");
     default_map.add_reg(tx_data, 'h0C, "WO");
-    default_map.add_reg(rx_data, 'h10, "RO");
-    default_map.add_reg(baud_div, 'h14, "RW");
+    default_map.add_reg(rx_data, 'h0C, "RO");
+    default_map.add_reg(baud_div, 'h10, "RW");
 
     lock_model();
   endfunction

@@ -44,9 +44,8 @@ module uart_reg_file (
   localparam bit [4:0] ADDR_CFG       = 5'h00;
   localparam bit [4:0] ADDR_STATUS    = 5'h04; // Raw Status/Interrupt register (combines STATUS and RIS)
   localparam bit [4:0] ADDR_IER       = 5'h08; // Interrupt Enable Register
-  localparam bit [4:0] ADDR_TX_DATA   = 5'h0C;
-  localparam bit [4:0] ADDR_RX_DATA   = 5'h10;
-  localparam bit [4:0] ADDR_BAUD_DIV  = 5'h14;
+  localparam bit [4:0] ADDR_DATA      = 5'h0C; // Shared Transmit/Receive Data Register
+  localparam bit [4:0] ADDR_BAUD_DIV  = 5'h10; // Shifted divisor register
 
   // Generate internal write/read strobe signals
   logic reg_write;
@@ -60,8 +59,7 @@ module uart_reg_file (
   assign addr_valid = (PADDR == ADDR_CFG) ||
                        (PADDR == ADDR_STATUS) ||
                        (PADDR == ADDR_IER) ||
-                       (PADDR == ADDR_TX_DATA) ||
-                       (PADDR == ADDR_RX_DATA) ||
+                       (PADDR == ADDR_DATA) ||
                        (PADDR == ADDR_BAUD_DIV);
 
   // Ready and Slave Error logic
@@ -151,14 +149,14 @@ module uart_reg_file (
       // Bit 3: RX Done
       if (rx_valid_hw) begin
         status_latched[3] <= 1'b1;
-      end else if ((reg_read && PADDR == ADDR_RX_DATA) || (reg_write && PADDR == ADDR_STATUS && PWDATA[3])) begin
+      end else if ((reg_read && PADDR == ADDR_DATA) || (reg_write && PADDR == ADDR_STATUS && PWDATA[3])) begin
         status_latched[3] <= 1'b0;
       end
 
       // Bit 5: Overrun Error
-      if (rx_valid_hw && status_reg[3] && !(reg_read && PADDR == ADDR_RX_DATA)) begin
+      if (rx_valid_hw && status_reg[3] && !(reg_read && PADDR == ADDR_DATA)) begin
         status_latched[4] <= 1'b1;
-      end else if ((reg_read && PADDR == ADDR_RX_DATA) || (reg_write && PADDR == ADDR_STATUS && PWDATA[5])) begin
+      end else if ((reg_read && PADDR == ADDR_DATA) || (reg_write && PADDR == ADDR_STATUS && PWDATA[5])) begin
         status_latched[4] <= 1'b0;
       end
     end
@@ -201,7 +199,7 @@ module uart_reg_file (
       tx_data_hw <= 8'h00;
       tx_pending <= 1'b0;
     end else begin
-      if (reg_write && PADDR == ADDR_TX_DATA && tx_ready_reg_file && tx_enable_ctrl) begin
+      if (reg_write && PADDR == ADDR_DATA && tx_ready_reg_file && tx_enable_ctrl) begin
         tx_data_hw <= PWDATA[7:0];
         tx_pending <= 1'b1;
       end else if (tx_pending && !tx_ready_hw) begin
@@ -230,7 +228,7 @@ module uart_reg_file (
       ADDR_CFG:       PRDATA = {22'b0, cfg_reg};
       ADDR_STATUS:    PRDATA = {26'b0, status_reg};
       ADDR_IER:       PRDATA = {26'b0, IER_reg};
-      ADDR_RX_DATA:   PRDATA = {24'b0, rx_data_reg};
+      ADDR_DATA:      PRDATA = {24'b0, rx_data_reg};
       ADDR_BAUD_DIV:  PRDATA = {16'b0, baud_div_reg};
       default:        PRDATA = 32'b0;
     endcase

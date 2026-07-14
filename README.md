@@ -75,10 +75,9 @@ Base address offsets:
 - `0x00` — **CFG** (Configuration Register, reset value `10'h18`)
 - `0x04` — **STATUS** (Consolidated status and raw interrupt flags, W1C/RO, reset value `32'h10`)
 - `0x08` — **IER** (Interrupt Enable Register, RW, reset value `32'h0`)
-- `0x0C` — **TX_DATA** (Transmit Data, Write-Only)
-- `0x10` — **RX_DATA** (Receive Data, Read-Only, auto-clears status/interrupt flags on read)
-- `0x14` — **BAUD_DIV** (Baud rate divisor register, RW, reset value `16'd163`)
-- `0x18` to `0x1C` — **Reserved / Unmapped** (Triggers APB `PSLVERR` bus error on access)
+- `0x0C` — **DATA** (Shared Transmit/Receive Data Register, Mix, reset value `32'h0`)
+- `0x10` — **BAUD_DIV** (Baud rate divisor register, RW, reset value `16'd163`)
+- `0x14` to `0x1C` — **Reserved / Unmapped** (Triggers APB `PSLVERR` bus error on access)
 
 For detailed descriptions of registers and bit maps, refer to [docs/register_map.md](file:///mnt/Local_Disk1/My_GitHub/Digital_Projects/UART/docs/register_map.md).
 

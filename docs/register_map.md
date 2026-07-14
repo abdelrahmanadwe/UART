@@ -17,10 +17,9 @@ This document describes the memory-mapped register interface of the UART periphe
 | `0x00` | [CFG](#0x00--cfg--configuration-register) | RW | `0x0000_0018` | Line configuration & enables (data size, parity, stop bits, enables). |
 | `0x04` | [STATUS](#0x04--status--status-and-raw-interrupt-register) | RW1C / RO | `0x0000_0010` | Consolidated status and raw interrupt event flags. Bit 4 is level-sensitive (RO), others are W1C. |
 | `0x08` | [IER](#0x08--ier--interrupt-enable-register) | RW | `0x0000_0000` | Interrupt enable masks. |
-| `0x0C` | [TX_DATA](#0x0c--tx_data--transmit-data-register) | WO | `0x0000_0000` | Data byte to transmit. |
-| `0x10` | [RX_DATA](#0x10--rx_data--receive-data-register) | RO | `0x0000_0000` | Last received data byte. Reading auto-clears `STATUS.rx_done` and `STATUS.overrun_error`. |
-| `0x14` | [BAUD_DIV](#0x14--baud_div--baud-rate-divisor-register) | RW | `0x0000_00A3` | Baud rate divisor value. |
-| `0x18` to `0x1C` | — | — | — | **Reserved / Unmapped** (Triggers `PSLVERR` on access). |
+| `0x0C` | [DATA](#0x0c--data--data-register) | Mix (WO/RO) | `0x0000_0000` | Shared Data Register. Writes go to TX buffer, reads come from RX buffer (auto-clears status flags). |
+| `0x10` | [BAUD_DIV](#0x10--baud_div--baud-rate-divisor-register) | RW | `0x0000_00A3` | Baud rate divisor value. |
+| `0x14` to `0x1C` | — | — | — | **Reserved / Unmapped** (Triggers `PSLVERR` on access). |
 
 > [!NOTE]
 > **Access Types**: **RW** = Read/Write, **RO** = Read Only, **WO** = Write Only, **RW1C** = Read / Write-1-to-Clear.
@@ -114,32 +113,23 @@ The global `irq` output pin is the logical OR of all active enabled interrupts: 
 
 ---
 
-### `0x0C` — TX_DATA (Transmit Data Register)
+### `0x0C` — DATA (Data Register)
 
-Write-only register. Writing a byte to this register initiates a UART transmission.
-
-| Bits | Field | Access | Reset | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `[7:0]` | `tx_data` | WO | `0x00` | The data byte to transmit. Only the lower `data_size` bits are shifted out on the serial line. |
-| `[31:8]` | — | — | `0` | Reserved (ignored on write). |
-
-> [!WARNING]
-> Writes to `TX_DATA` are **silently ignored** if `STATUS.tx_ready == 0` (i.e. if the TX buffer is full or `tx_enable == 0`).
-
----
-
-### `0x10` — RX_DATA (Receive Data Register)
-
-Read-only register holding the last received byte. Reading this register automatically clears `STATUS.rx_done` and `STATUS.overrun_error`.
+Shared register address for data transmit (TDR) and receive (RDR) operations.
+* **Writes** to this register go to the Transmit Data Register (WO). Writing a byte initiates a UART transmission.
+* **Reads** from this register return the last received byte from the Receive Data Register (RO). Reading this register automatically clears `STATUS.rx_done` and `STATUS.overrun_error`.
 
 | Bits | Field | Access | Reset | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `[7:0]` | `rx_data` | RO | `0x00` | The last received data byte. Only the lower `data_size` bits are valid. |
+| `[7:0]` | `data` | WO/RO | `0x00` | Transmit write data / Receive read data. Only the lower `data_size` bits are active. |
 | `[31:8]` | — | — | `0` | Reserved. |
 
+> [!WARNING]
+> Writes to the transmit register are **silently ignored** if `STATUS.tx_ready == 0` (i.e. if the TX buffer is full or `tx_enable == 0`).
+
 ---
 
-### `0x14` — BAUD_DIV (Baud Rate Divisor Register)
+### `0x10` — BAUD_DIV (Baud Rate Divisor Register)
 
 Read/Write register configuring the baud rate division factor. This register is frequency-independent and works across any clock rate.
 
@@ -175,10 +165,8 @@ $$\text{divisor} = \frac{F_{\text{CLK}}}{\text{Baud Rate} \times 16}$$
  0x08     ├───────────────────────────────┤
           │         IER (RW)              │
  0x0C     ├───────────────────────────────┤
-          │       TX_DATA (WO)            │
+          │         DATA (Mix)            │
  0x10     ├───────────────────────────────┤
-          │       RX_DATA (RO)            │
- 0x14     ├───────────────────────────────┤
           │      BAUD_DIV (RW)            │
           └───────────────────────────────┘
 ```
@@ -201,8 +189,8 @@ UART->CFG = 0x318;
 // 1. Wait until transmitter is ready (STATUS bit 4 is tx_ready)
 while (!(UART->STATUS & 0x10));
 
-// 2. Write data to TX_DATA
-UART->TX_DATA = byte_to_send;
+// 2. Write data to DATA
+UART->DATA = byte_to_send;
 ```
 
 ### Receiving a Byte (Polling)
@@ -210,8 +198,8 @@ UART->TX_DATA = byte_to_send;
 // 1. Wait until a byte is available (STATUS bit 3 is rx_done)
 while (!(UART->STATUS & 0x08));
 
-// 2. Read data from RX_DATA (auto-clears STATUS.rx_done and STATUS.overrun_error)
-uint8_t received = UART->RX_DATA & 0xFF;
+// 2. Read data from DATA (auto-clears STATUS.rx_done and STATUS.overrun_error)
+uint8_t received = UART->DATA & 0xFF;
 ```
 
 ### Receiving a Byte (Interrupt-Driven)
@@ -226,7 +214,7 @@ void UART_IRQHandler(void) {
     
     // Check if rx_done interrupt fired (both STATUS.rx_done and IER.rx_done_ie are high)
     if ((status & 0x08) && (ier & 0x08)) {
-        uint8_t data = UART->RX_DATA; // Reading RX_DATA auto-clears STATUS.rx_done
+        uint8_t data = UART->DATA; // Reading DATA auto-clears STATUS.rx_done
         // Process data...
     }
     
