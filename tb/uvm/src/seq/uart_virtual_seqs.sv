@@ -347,6 +347,13 @@ class uart_rand_vseq extends uart_vseq_base;
 
       // Read RX_DATA (triggers scoreboard match checking)
       reg_model.rx_data.read(status, read_val, .parent(this));
+
+      // Read status register to check for any set error flags (parity or framing error)
+      reg_model.status.read(status, read_val, .parent(this));
+      if (read_val[1] || read_val[2]) begin
+        `uvm_info("VSEQ_RAND", $sformatf("Clearing detected RX error status flags: STATUS=%h", read_val), UVM_MEDIUM)
+        reg_model.status.write(status, 32'h3F, .parent(this)); // W1C to clear all status/error flags
+      end
     end
 
     // Restore to default config

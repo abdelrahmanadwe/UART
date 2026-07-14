@@ -26,6 +26,13 @@ class uart_scoreboard extends uvm_scoreboard;
   int tx_write_count = 0;
   int tx_done_intr_count = 0;
 
+  // Expected status register flags for tracking and verification
+  bit exp_status_tx_done = 1'b0;
+  bit exp_status_parity_error = 1'b0;
+  bit exp_status_framing_error = 1'b0;
+  bit exp_status_rx_done = 1'b0;
+  bit exp_status_overrun_error = 1'b0;
+
   function new(string name = "uart_scoreboard", uvm_component parent = null);
     super.new(name, parent);
   endfunction
@@ -51,9 +58,43 @@ class uart_scoreboard extends uvm_scoreboard;
     end
   endtask
 
-  // APB Transaction Monitor write implementation
+  // APB Transaction Monitor write/read implementation
   function void write_apb(apb_seq_item trans);
-    // TX Data Write
+    // 1. STATUS W1C Write
+    if (trans.write && trans.addr == 5'h04) begin
+      if (trans.wdata[0]) exp_status_tx_done = 1'b0;
+      if (trans.wdata[1]) exp_status_parity_error = 1'b0;
+      if (trans.wdata[2]) exp_status_framing_error = 1'b0;
+      if (trans.wdata[3]) exp_status_rx_done = 1'b0;
+      if (trans.wdata[5]) exp_status_overrun_error = 1'b0;
+      `uvm_info("SCB_STATUS_W1C", $sformatf("STATUS W1C Write: %h. New Expected: tx_done=%b, parity_err=%b, framing_err=%b, rx_done=%b, overrun=%b",
+                trans.wdata, exp_status_tx_done, exp_status_parity_error, exp_status_framing_error, exp_status_rx_done, exp_status_overrun_error), UVM_HIGH)
+    end
+
+    // 2. STATUS Read Verification
+    if (!trans.write && trans.addr == 5'h04) begin
+      bit [31:0] mask;
+      bit [31:0] exp_val;
+      
+      if (trans.rdata[3] == 1'b1) begin
+        // Reception finished in hardware: verify rx_done and error flags
+        mask = 32'h0000_002E; // Verify rx_done (bit 3), overrun_error (bit 5), framing_error (bit 2), parity_error (bit 1)
+        exp_val = {26'b0, exp_status_overrun_error, 1'b0, exp_status_rx_done, exp_status_framing_error, exp_status_parity_error, 1'b0};
+      end else begin
+        // Reception still in progress: only verify that rx_done is 0
+        mask = 32'h0000_0008; // Only verify rx_done (bit 3) is 0
+        exp_val = 32'h0;
+      end
+
+      if ((trans.rdata & mask) !== (exp_val & mask)) begin
+        `uvm_error("SCB_STATUS_MISMATCH", $sformatf("STATUS Mismatch! Read %h, Expected %h (masked check: %h vs %h)", 
+                   trans.rdata, exp_val, trans.rdata & mask, exp_val & mask))
+      end else begin
+        `uvm_info("SCB_STATUS_MATCH", $sformatf("STATUS Match! Read %h successfully matched expected %h", trans.rdata & mask, exp_val & mask), UVM_HIGH)
+      end
+    end
+
+    // 3. TX Data Write
     if (trans.write && trans.addr == 5'h0C) begin
       // Verify tx_enable is active
       bit [31:0] cfg_val = reg_model.cfg.get_mirrored_value();
@@ -69,9 +110,11 @@ class uart_scoreboard extends uvm_scoreboard;
       end
     end
 
-    // RX Data Read
+    // 4. RX Data Read (also auto-clears rx_done and overrun_error)
     if (!trans.write && trans.addr == 5'h0C) begin
       `uvm_info("SCB_RX", $sformatf("Read RX Byte from APB: %h", trans.rdata[7:0]), UVM_MEDIUM)
+      exp_status_rx_done = 1'b0;
+      exp_status_overrun_error = 1'b0;
       if (rx_expected_q.size() == 0) begin
         `uvm_error("SCB_RX_ERR", $sformatf("Read RX Data %h from APB, but rx_expected_q is empty!", trans.rdata[7:0]))
       end else begin
@@ -88,6 +131,7 @@ class uart_scoreboard extends uvm_scoreboard;
   // UART TX Monitor write implementation (captures serial frames driven by the DUT's tx_serial line)
   function void write_uart_tx(uart_seq_item trans);
     `uvm_info("SCB_TX", $sformatf("Captured Serial TX Byte: %h", trans.data), UVM_MEDIUM)
+    exp_status_tx_done = 1'b1; // Transmission complete sets tx_done
     if (tx_expected_q.size() == 0) begin
       `uvm_error("SCB_TX_ERR", $sformatf("Captured Serial TX Byte %h, but tx_expected_q is empty!", trans.data))
     end else begin
@@ -116,14 +160,25 @@ class uart_scoreboard extends uvm_scoreboard;
   function void write_uart_rx(uart_seq_item trans);
     bit [31:0] cfg_val = reg_model.cfg.get_mirrored_value();
     if (cfg_val[9] == 1'b1) begin // rx_enable is bit 9
+      // Set expected error flags
+      if (trans.error_type == ERR_PARITY) begin
+        exp_status_parity_error = 1'b1;
+      end
+      if (trans.error_type == ERR_FRAMING) begin
+        exp_status_framing_error = 1'b1;
+      end
+
       // If the scoreboard queue already contains a byte, it means the CPU hasn't read it yet.
       // Driving a new byte will cause an overrun in hardware, overwriting the buffered byte.
       if (rx_expected_q.size() >= 1) begin
         bit [7:0] discarded = rx_expected_q.pop_front();
         `uvm_info("SCB_RX_OVERRUN", $sformatf("Scoreboard predicted Data Overrun! Overwriting discarded byte %h with new byte %h.", discarded, trans.data), UVM_MEDIUM)
+        exp_status_overrun_error = 1'b1;
       end
 
-      `uvm_info("SCB_RX", $sformatf("Expected RX Byte driven on serial line: %h", trans.data), UVM_MEDIUM)
+      exp_status_rx_done = 1'b1;
+
+      `uvm_info("SCB_RX", $sformatf("Expected RX Byte driven on serial line: %h, error_type: %s", trans.data, trans.error_type.name()), UVM_MEDIUM)
       rx_expected_q.push_back(trans.data);
     end
   endfunction
