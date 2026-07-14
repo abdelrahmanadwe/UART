@@ -10,3 +10,6 @@ vsim.wlf
 *.vmake
 _info
 _opt/
+
+# Documentation guides ignored by user request
+docs/

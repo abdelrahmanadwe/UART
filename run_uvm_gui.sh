@@ -1,8 +1,11 @@
 #!/bin/bash
-# Run UVM simulation in GUI mode and keep the waveform viewer open.
-# Usage: ./run_uvm_gui.sh [test_name] (default: uart_loopback_test)
+# Usage: ./run_uvm_gui.sh [test_name] [verbosity]
+# Examples:
+#   ./run_uvm_gui.sh uart_rand_test UVM_HIGH
+#   ./run_uvm_gui.sh uart_loopback_test UVM_MEDIUM
 
 TEST_NAME=${1:-uart_loopback_test}
+VERBOSITY=${2:-UVM_MEDIUM}
 
-echo "=== Running UVM Test: $TEST_NAME in GUI mode ==="
-vsim -do "do sim/scripts/run_uvm.do; vsim -voptargs=\"+acc\" uart_tb_uvm_top +UVM_TESTNAME=$TEST_NAME; log -r /*; run -all"
+echo "=== Running UVM Test: $TEST_NAME with Verbosity: $VERBOSITY in GUI mode ==="
+vsim -do "do sim/scripts/run_uvm.do $TEST_NAME $VERBOSITY"
