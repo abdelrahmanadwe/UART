@@ -5,7 +5,6 @@ import uvm_pkg::*;
 `include "uart_reg_cfg.sv"
 `include "uart_reg_baud_div.sv"
 `include "uart_reg_status.sv"
-`include "uart_reg_ris.sv"
 `include "uart_reg_ier.sv"
 `include "uart_reg_tx_data.sv"
 `include "uart_reg_rx_data.sv"
@@ -18,7 +17,6 @@ class uart_reg_block extends uvm_reg_block;
 
   rand uart_reg_cfg     cfg;
   uart_reg_status       status;
-  uart_reg_ris          ris;
   rand uart_reg_ier     ier;
   rand uart_reg_tx_data tx_data;
   uart_reg_rx_data      rx_data;
@@ -38,10 +36,6 @@ class uart_reg_block extends uvm_reg_block;
     status = uart_reg_status::type_id::create("status");
     status.configure(this);
     status.build();
-
-    ris = uart_reg_ris::type_id::create("ris");
-    ris.configure(this);
-    ris.build();
 
     ier = uart_reg_ier::type_id::create("ier");
     ier.configure(this);
@@ -65,12 +59,11 @@ class uart_reg_block extends uvm_reg_block;
     
     // Add registers to map: reg, offset, access
     default_map.add_reg(cfg,     'h00, "RW");
-    default_map.add_reg(status,  'h04, "RO");
-    default_map.add_reg(ris,     'h08, "RW"); // W1C registers are set as RW in map to allow writing 1 to clear
-    default_map.add_reg(ier,     'h0C, "RW");
-    default_map.add_reg(tx_data, 'h14, "WO");
-    default_map.add_reg(rx_data, 'h18, "RO");
-    default_map.add_reg(baud_div, 'h1C, "RW");
+    default_map.add_reg(status,  'h04, "RW"); // Raw status register with W1C bits
+    default_map.add_reg(ier,     'h08, "RW");
+    default_map.add_reg(tx_data, 'h0C, "WO");
+    default_map.add_reg(rx_data, 'h10, "RO");
+    default_map.add_reg(baud_div, 'h14, "RW");
 
     lock_model();
   endfunction

@@ -58,8 +58,8 @@ class uart_reg_access_vseq extends uart_vseq_base;
     end
 
     reg_model.status.read(status, read_val, .parent(this));
-    if (read_val !== 32'h1) begin // Default status: tx_ready is 1, others 0
-      `uvm_error("VSEQ_REG_ERR", $sformatf("STATUS register reset value mismatch! Got %h, Expected 1", read_val))
+    if (read_val !== 32'h10) begin // Default status: tx_ready is 1 (bit 4), others 0 => 32'h10
+      `uvm_error("VSEQ_REG_ERR", $sformatf("STATUS register reset value mismatch! Got %h, Expected 10", read_val))
     end
 
     reg_model.ier.read(status, read_val, .parent(this));
@@ -99,7 +99,7 @@ class uart_reg_access_vseq extends uart_vseq_base;
 endclass
 
 // -----------------------------------------------------------------------------
-// Loopback Virtual Sequence (sends serial data and checks TX/RX data paths)
+// Loopback Virtual Sequence (sends a character over TX and loops it to RX)
 // -----------------------------------------------------------------------------
 class uart_loopback_vseq extends uart_vseq_base;
   `uvm_object_utils(uart_loopback_vseq)
@@ -113,9 +113,10 @@ class uart_loopback_vseq extends uart_vseq_base;
     bit [31:0] read_val;
     uart_send_frame_seq uart_seq;
 
-    `uvm_info("VSEQ_LOOPBACK", "Starting Loopback Data Path Verification...", UVM_MEDIUM)
+    `uvm_info("VSEQ_LOOPBACK", "Starting Hardware Loopback Verification...", UVM_MEDIUM)
 
-    // 1. Enable TX and RX in CFG (8-bit, No Parity, 1 Stop => 10'h318, Divisor = 163)
+    // 1. Configure registers for loopback
+    // cfg register: 10'h318 (8-bit data size, no parity, 1 stop bit, tx/rx enabled)
     reg_model.cfg.write(status, 32'h318, .parent(this));
     reg_model.baud_div.write(status, 32'd163, .parent(this));
 
@@ -123,9 +124,9 @@ class uart_loopback_vseq extends uart_vseq_base;
     // Write 8'hA5 to TX_DATA over APB
     reg_model.tx_data.write(status, 32'hA5, .parent(this));
     
-    // Wait for transmit to complete (poll STATUS.tx_ready until it goes back to 1)
+    // Wait for transmit to complete (poll STATUS.tx_ready (bit 4) until it goes back to 1)
     read_val = 32'h0;
-    while (read_val[0] == 1'b0) begin
+    while (read_val[4] == 1'b0) begin
       reg_model.status.read(status, read_val, .parent(this));
       #100ns;
     end
@@ -144,17 +145,22 @@ class uart_loopback_vseq extends uart_vseq_base;
     // Start standard sequence on UART agent sequencer
     uart_seq.start(uart_seqr);
 
-    // Wait for STATUS.rx_valid to become 1
+    // Wait for STATUS.rx_done (bit 3) to become 1
     read_val = 32'h0;
-    while (read_val[1] == 1'b0) begin
+    while (read_val[3] == 1'b0) begin
       reg_model.status.read(status, read_val, .parent(this));
       #100ns;
     end
 
     // Read received data via APB (will trigger scoreboard check)
     reg_model.rx_data.read(status, read_val, .parent(this));
+    $display("[VSEQ] Read RX_DATA value: %h (Expected: 5a)", read_val);
 
-    `uvm_info("VSEQ_LOOPBACK", "Loopback Data Path Verification Complete.", UVM_MEDIUM)
+    // Restore to default config
+    reg_model.cfg.write(status, 32'h018, .parent(this));
+    reg_model.baud_div.write(status, 32'd163, .parent(this));
+
+    `uvm_info("VSEQ_LOOPBACK", "Hardware Loopback Verification Complete.", UVM_MEDIUM)
   endtask
 endclass
 
@@ -179,8 +185,8 @@ class uart_overrun_vseq extends uart_vseq_base;
     reg_model.cfg.write(status, 32'h318, .parent(this));
     reg_model.baud_div.write(status, 32'd163, .parent(this));
     
-    // Clear raw interrupts (W1C)
-    reg_model.ris.write(status, 32'h3F, .parent(this));
+    // Clear raw status flags (W1C)
+    reg_model.status.write(status, 32'h3F, .parent(this));
 
     // 2. Drive first serial byte (8'hAA) - do NOT read RX_DATA
     uart_seq1 = uart_send_frame_seq::type_id::create("uart_seq1");
@@ -193,13 +199,13 @@ class uart_overrun_vseq extends uart_vseq_base;
 
     uart_seq1.start(uart_seqr);
 
-    // Wait for first byte reception to finish (rx_valid = 1)
+    // Wait for first byte reception to finish (rx_done = 1 at bit 3)
     read_val = 32'h0;
-    while (read_val[1] == 1'b0) begin
+    while (read_val[3] == 1'b0) begin
       reg_model.status.read(status, read_val, .parent(this));
       #100ns;
     end
-    $display("[VSEQ] First byte received. STATUS = %h (Expected rx_valid=1, dor=0)", read_val);
+    $display("[VSEQ] First byte received. STATUS = %h (Expected rx_done=1, overrun_error=0)", read_val);
 
     // 3. Drive second serial byte (8'h55) immediately to trigger Overrun
     uart_seq2 = uart_send_frame_seq::type_id::create("uart_seq2");
@@ -212,23 +218,17 @@ class uart_overrun_vseq extends uart_vseq_base;
 
     uart_seq2.start(uart_seqr);
 
-    // Wait for second byte reception to finish (tx_done of transmitter or just wait a frame time)
+    // Wait for second byte reception to finish
     #600000ns; 
 
-    // 4. Read STATUS and verify `dor == 1`
+    // 4. Read STATUS and verify `overrun_error == 1` at bit 5
     reg_model.status.read(status, read_val, .parent(this));
-    $display("[VSEQ] Post-second-byte STATUS = %h (Expected rx_valid=1, dor=1)", read_val);
-    if (read_val[2] !== 1'b1) begin
-      `uvm_error("VSEQ_OVERRUN_ERR", "Data Overrun flag (STATUS[2]) not set on double reception!")
-    end
-
-    // Verify overrun raw interrupt is active
-    reg_model.ris.read(status, read_val, .parent(this));
+    $display("[VSEQ] Post-second-byte STATUS = %h (Expected rx_done=1, overrun_error=1)", read_val);
     if (read_val[5] !== 1'b1) begin
-      `uvm_error("VSEQ_OVERRUN_ERR", "Overrun Raw Interrupt (RIS[5]) not set on double reception!")
+      `uvm_error("VSEQ_OVERRUN_ERR", "Data Overrun flag (STATUS[5]) not set on double reception!")
     end
 
-    // 5. Read RX_DATA - this must automatically clear STATUS.rx_valid, STATUS.dor, and RIS overrun interrupt!
+    // 5. Read RX_DATA - this must automatically clear STATUS.rx_done and STATUS.overrun_error!
     reg_model.rx_data.read(status, read_val, .parent(this));
     $display("[VSEQ] Read RX_DATA value: %h (Expected: 55, since AA was overwritten)", read_val);
     if (read_val[7:0] !== 8'h55) begin
@@ -237,15 +237,9 @@ class uart_overrun_vseq extends uart_vseq_base;
 
     // Verify STATUS cleared
     reg_model.status.read(status, read_val, .parent(this));
-    $display("[VSEQ] Post-read STATUS = %h (Expected rx_valid=0, dor=0)", read_val);
-    if (read_val[1] !== 1'b0 || read_val[2] !== 1'b0) begin
-      `uvm_error("VSEQ_OVERRUN_ERR", "STATUS.rx_valid or STATUS.dor failed to clear on RX_DATA read!")
-    end
-
-    // Verify RIS cleared
-    reg_model.ris.read(status, read_val, .parent(this));
-    if (read_val[5] !== 1'b0 || read_val[3] !== 1'b0) begin
-      `uvm_error("VSEQ_OVERRUN_ERR", "RIS.overrun_error or RIS.rx_done failed to clear on RX_DATA read!")
+    $display("[VSEQ] Post-read STATUS = %h (Expected rx_done=0, overrun_error=0)", read_val);
+    if (read_val[3] !== 1'b0 || read_val[5] !== 1'b0) begin
+      `uvm_error("VSEQ_OVERRUN_ERR", "STATUS.rx_done or STATUS.overrun_error failed to clear on RX_DATA read!")
     end
 
     `uvm_info("VSEQ_OVERRUN", "Data OverRun (DOR) Verification Complete.", UVM_MEDIUM)
@@ -253,7 +247,7 @@ class uart_overrun_vseq extends uart_vseq_base;
 endclass
 
 // -----------------------------------------------------------------------------
-// Legal Randomized Virtual Sequence
+// Randomized Configuration and Bidirectional Data Flow Virtual Sequence
 // -----------------------------------------------------------------------------
 class uart_rand_vseq extends uart_vseq_base;
   `uvm_object_utils(uart_rand_vseq)
@@ -265,6 +259,8 @@ class uart_rand_vseq extends uart_vseq_base;
   task body();
     uvm_status_e status;
     bit [31:0] read_val;
+    bit [31:0] cfg_val;
+    bit [31:0] div_val;
     bit [7:0] rand_data;
     uart_send_frame_seq uart_seq;
 
@@ -273,40 +269,37 @@ class uart_rand_vseq extends uart_vseq_base;
     repeat (90) begin
       // 1. Randomize registers with strictly legal options
       // Data size: random (5 to 8 bits)
-      // Parity: random (0=none, 2=even, 3=odd)
-      // Stop bits: random (0=1 stop bit, 1=2 stop bits)
-      // Enable TX and RX (both must be 1)
+      // Parity: random (0=none, 2=even, 3=odd) - exclude reserved value 2'b01
+      // Stop bits: random (1 or 2 stop bits)
+      // Baud Divisor: random [2 to 50] to test multiple speeds safely
       if (!reg_model.cfg.randomize() with {
         tx_enable.value == 1'b1;
         rx_enable.value == 1'b1;
-        parity.value    != 2'b01; // Exclude reserved parity from legal rand test!
+        parity.value    != 2'b01; // Avoid reserved parity configuration in legal random tests
       }) begin
         `uvm_error("VSEQ_RAND_ERR", "CFG register randomization failed")
       end
-
-      // Baud Divisor: restrict to legal range [2 to 50] to cover small divisor coverage bins
       if (!reg_model.baud_div.randomize() with {
-        divisor.value >= 16'd2;
-        divisor.value <= 16'd50;
+        divisor.value   >= 16'd2;
+        divisor.value   <= 16'd50;
       }) begin
         `uvm_error("VSEQ_RAND_ERR", "BAUD_DIV register randomization failed")
       end
 
-      // Write configurations to DUT
       reg_model.cfg.update(status, .parent(this));
       reg_model.baud_div.update(status, .parent(this));
-
-      // Clear raw interrupts (W1C)
-      reg_model.ris.write(status, 32'h3F, .parent(this));
+      
+      // Clear status flags
+      reg_model.status.write(status, 32'h3F, .parent(this));
 
       // 2. Perform a TX write and verify transmission
       rand_data = $urandom;
       `uvm_info("VSEQ_RAND", $sformatf("Writing random TX data: %h", rand_data), UVM_MEDIUM)
       reg_model.tx_data.write(status, {24'h0, rand_data}, .parent(this));
 
-      // Poll tx_ready
+      // Poll tx_ready (bit 4)
       read_val = 32'h0;
-      while (read_val[0] == 1'b0) begin
+      while (read_val[4] == 1'b0) begin
         reg_model.status.read(status, read_val, .parent(this));
         #100ns;
       end
@@ -320,8 +313,8 @@ class uart_rand_vseq extends uart_vseq_base;
       
       // Get the current mirrored configuration values
       begin
-        bit [31:0] cfg_val = reg_model.cfg.get_mirrored_value();
-        bit [31:0] div_val = reg_model.baud_div.get_mirrored_value();
+        cfg_val = reg_model.cfg.get_mirrored_value();
+        div_val = reg_model.baud_div.get_mirrored_value();
         
         if (!uart_seq.randomize() with {
           data        == rand_data;
@@ -337,9 +330,9 @@ class uart_rand_vseq extends uart_vseq_base;
       
       uart_seq.start(uart_seqr);
 
-      // Poll rx_valid
+      // Poll rx_done (bit 3)
       read_val = 32'h0;
-      while (read_val[1] == 1'b0) begin
+      while (read_val[3] == 1'b0) begin
         reg_model.status.read(status, read_val, .parent(this));
         #100ns;
       end
@@ -348,12 +341,16 @@ class uart_rand_vseq extends uart_vseq_base;
       reg_model.rx_data.read(status, read_val, .parent(this));
     end
 
+    // Restore to default config
+    reg_model.cfg.write(status, 32'h018, .parent(this));
+    reg_model.baud_div.write(status, 32'd163, .parent(this));
+
     `uvm_info("VSEQ_RAND", "Legal Randomized Verification Complete.", UVM_MEDIUM)
   endtask
 endclass
 
 // -----------------------------------------------------------------------------
-// Illegal Randomized Virtual Sequence (Robustness Testing)
+// Robustness, Boundary Conditions, and Error Injection Virtual Sequence
 // -----------------------------------------------------------------------------
 class uart_illegal_rand_vseq extends uart_vseq_base;
   `uvm_object_utils(uart_illegal_rand_vseq)
@@ -370,8 +367,8 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
 
     `uvm_info("VSEQ_ILLEGAL", "Starting Illegal/Corner-Case Randomized Verification...", UVM_MEDIUM)
 
-    // Clear raw interrupts (W1C)
-    reg_model.ris.write(status, 32'h3F, .parent(this));
+    // Clear all status flags first
+    reg_model.status.write(status, 32'h3F, .parent(this));
 
     // Case 1: Write illegal baud rate divisor = 0
     `uvm_info("VSEQ_ILLEGAL", "Case 1: Setting Baud Divisor = 0 (Illegal value)", UVM_MEDIUM)
@@ -387,7 +384,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     `uvm_info("VSEQ_ILLEGAL", "Case 3: Accessing Unmapped addresses (0x02, 0x06)", UVM_MEDIUM)
     begin
       apb_seq_item item = apb_seq_item::type_id::create("item");
-      item.addr = 5'h02; // unmapped (not 4-byte aligned in a 5-bit address space)
+      item.addr = 5'h02; // unmapped
       item.write = 1'b1;
       item.wdata = 32'hDEADBEEF;
       start_item(item, .sequencer(apb_seqr));
@@ -414,7 +411,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     // Case 4: Send serial frame with Parity Error
     `uvm_info("VSEQ_ILLEGAL", "Case 4: Injecting Parity Error on serial line", UVM_MEDIUM)
     reg_model.cfg.write(status, 32'h358, .parent(this)); // enable parity (even = 2'b10), tx/rx enabled
-    reg_model.ris.write(status, 32'h3F, .parent(this)); // clear flags
+    reg_model.status.write(status, 32'h3F, .parent(this)); // clear flags
     
     uart_seq = uart_send_frame_seq::type_id::create("uart_seq");
     if (!uart_seq.randomize() with {
@@ -430,11 +427,11 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     uart_seq.start(uart_seqr);
     #300000ns;
 
-    // Read STATUS and RIS to verify error flag is set
-    reg_model.ris.read(status, read_val, .parent(this));
-    $display("[VSEQ] RIS post parity error = %h (Expected parity_error=1 at bit 1)", read_val);
+    // Read STATUS to verify error flag is set
+    reg_model.status.read(status, read_val, .parent(this));
+    $display("[VSEQ] STATUS post parity error = %h (Expected parity_error=1 at bit 1)", read_val);
     if (read_val[1] !== 1'b1) begin
-      `uvm_error("VSEQ_ILLEGAL_ERR", "Parity error flag (RIS[1]) not set on parity error reception!")
+      `uvm_error("VSEQ_ILLEGAL_ERR", "Parity error flag (STATUS[1]) not set on parity error reception!")
     end
 
     // Read RX_DATA to flush queue and clear hardware flags
@@ -442,7 +439,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
 
     // Case 5: Send serial frame with Framing Error
     `uvm_info("VSEQ_ILLEGAL", "Case 5: Injecting Framing Error on serial line", UVM_MEDIUM)
-    reg_model.ris.write(status, 32'h3F, .parent(this)); // clear flags
+    reg_model.status.write(status, 32'h3F, .parent(this)); // clear flags
     reg_model.cfg.write(status, 32'h318, .parent(this)); // 8-bit, no parity, tx/rx enabled
     
     uart_seq = uart_send_frame_seq::type_id::create("uart_seq");
@@ -459,11 +456,11 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     uart_seq.start(uart_seqr);
     #300000ns;
 
-    // Read RIS to verify framing error flag is set
-    reg_model.ris.read(status, read_val, .parent(this));
-    $display("[VSEQ] RIS post framing error = %h (Expected framing_error=1 at bit 2)", read_val);
+    // Read STATUS to verify framing error flag is set
+    reg_model.status.read(status, read_val, .parent(this));
+    $display("[VSEQ] STATUS post framing error = %h (Expected framing_error=1 at bit 2)", read_val);
     if (read_val[2] !== 1'b1) begin
-      `uvm_error("VSEQ_ILLEGAL_ERR", "Framing error flag (RIS[2]) not set on framing error reception!")
+      `uvm_error("VSEQ_ILLEGAL_ERR", "Framing error flag (STATUS[2]) not set on framing error reception!")
     end
 
     // Read RX_DATA to flush queue and clear hardware flags
@@ -490,9 +487,9 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
         rand_data = $urandom;
         reg_model.tx_data.write(status, {24'h0, rand_data}, .parent(this));
 
-        // Poll tx_ready to ensure it completes
+        // Poll tx_ready (bit 4) to ensure it completes
         read_val = 32'h0;
-        while (read_val[0] == 1'b0) begin
+        while (read_val[4] == 1'b0) begin
           reg_model.status.read(status, read_val, .parent(this));
         end
         #100000ns; // Wait for transmission to propagate through monitor
@@ -500,7 +497,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     end
 
     // Clear all flags and restore settings
-    reg_model.ris.write(status, 32'h3F, .parent(this));
+    reg_model.status.write(status, 32'h3F, .parent(this));
     reg_model.cfg.write(status, 32'h18, .parent(this));
 
     `uvm_info("VSEQ_ILLEGAL", "Illegal/Corner-Case Randomized Verification Complete.", UVM_MEDIUM)

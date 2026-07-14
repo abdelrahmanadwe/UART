@@ -85,27 +85,27 @@ class uart_coverage extends uvm_component;
       end
 
       // Sample BAUD_DIV
-      if (trans.write && trans.addr == 5'h1C) begin
+      if (trans.write && trans.addr == 5'h14) begin
         baud_div = trans.wdata[15:0];
         cg_cfg.sample();
       end
       
-      // Sample STATUS
-      if (!trans.write && trans.addr == 5'h04) begin
-        tx_ready = trans.rdata[0];
-        rx_valid = trans.rdata[1];
-        dor      = trans.rdata[2];
+      // Sample STATUS (combines status flags and raw interrupt flags)
+      if (trans.addr == 5'h04) begin
+        bit [31:0] status_val = trans.write ? trans.wdata : trans.rdata;
+        
+        // Status bits for cg_status
+        tx_ready = status_val[4];
+        rx_valid = status_val[3];
+        dor      = status_val[5];
         cg_status.sample();
-      end
 
-      // Sample RIS (Raw Interrupt Status)
-      if (trans.addr == 5'h08) begin
-        bit [31:0] ris_val = trans.write ? trans.wdata : trans.rdata;
-        tx_done       = ris_val[0];
-        parity_error  = ris_val[1];
-        framing_error = ris_val[2];
-        rx_done       = ris_val[3];
-        overrun_error = ris_val[5];
+        // Interrupt bits for cg_interrupts
+        tx_done       = status_val[0];
+        parity_error  = status_val[1];
+        framing_error = status_val[2];
+        rx_done       = status_val[3];
+        overrun_error = status_val[5];
         cg_interrupts.sample();
       end
     end

@@ -1,35 +1,34 @@
 import uart_defs::*;
 
 module uart_reg_file (
-  // APB Standard Bus Interface
-  input  logic                  PCLK,
-  input  logic                  PRESETn,
-  input  logic [4:0]            PADDR,
-  input  logic                  PSEL,
-  input  logic                  PENABLE,
-  input  logic                  PWRITE,
-  input  logic [31:0]           PWDATA,
-  output logic                  PREADY,
+  input logic                   PCLK,
+  input logic                   PRESETn,
+  input logic [4:0]             PADDR,
+  input logic                   PSEL,
+  input logic                   PENABLE,
+  input logic                   PWRITE,
+  input logic [31:0]            PWDATA,
   output logic [31:0]           PRDATA,
+  output logic                  PREADY,
   output logic                  PSLVERR,
 
   // Hardware Status Inputs from RX/TX
-  input  logic                  tx_ready_hw,
-  input  logic                  tx_done_hw,
-  input  logic [7:0]            rx_data_hw,
-  input  logic                  rx_valid_hw,
-  input  logic                  rx_parity_error_hw,
-  input  logic                  rx_framing_error_hw,
+  input logic                   tx_ready_hw,
+  input logic                   tx_done_hw,
+  input logic                   rx_valid_hw,
+  input logic [7:0]             rx_data_hw,
+  input logic                   rx_parity_error_hw,
+  input logic                   rx_framing_error_hw,
 
-  // Hardware Control Outputs to RX/TX
+  // Control Outputs to RX/TX
   output logic [7:0]            tx_data_hw,
   output logic                  tx_valid_hw,
-  output data_size_e            data_size_ctrl,
-  output parity_ctrl_e          parity_ctrl,
-  output stop_bits_e            stop_bits_ctrl,
   output logic [15:0]           baud_div,
   output logic                  tx_enable_ctrl,
   output logic                  rx_enable_ctrl,
+  output data_size_e            data_size_ctrl,
+  output parity_ctrl_e          parity_ctrl,
+  output stop_bits_e            stop_bits_ctrl,
 
   // Interrupt Outputs (Masked)
   output logic                  irq_tx_ready,
@@ -43,16 +42,13 @@ module uart_reg_file (
 
   // APB Address Decodes (5-bit byte offset)
   localparam bit [4:0] ADDR_CFG       = 5'h00;
-  localparam bit [4:0] ADDR_STATUS    = 5'h04;
-  localparam bit [4:0] ADDR_INTR_RAW  = 5'h08;
-  localparam bit [4:0] ADDR_INTR_EN   = 5'h0C;
-  localparam bit [4:0] ADDR_INTR_MASK = 5'h10;
-  localparam bit [4:0] ADDR_TX_DATA   = 5'h14;
-  localparam bit [4:0] ADDR_RX_DATA   = 5'h18;
-  localparam bit [4:0] ADDR_BAUD_DIV  = 5'h1C;
+  localparam bit [4:0] ADDR_STATUS    = 5'h04; // Raw Status/Interrupt register (combines STATUS and RIS)
+  localparam bit [4:0] ADDR_IER       = 5'h08; // Interrupt Enable Register
+  localparam bit [4:0] ADDR_TX_DATA   = 5'h0C;
+  localparam bit [4:0] ADDR_RX_DATA   = 5'h10;
+  localparam bit [4:0] ADDR_BAUD_DIV  = 5'h14;
 
   // Generate internal write/read strobe signals
-  // Side-effects should only occur during the APB ACCESS phase (PSEL & PENABLE)
   logic reg_write;
   logic reg_read;
 
@@ -62,12 +58,11 @@ module uart_reg_file (
   // Address validity check
   logic addr_valid;
   assign addr_valid = (PADDR == ADDR_CFG) ||
-                      (PADDR == ADDR_STATUS) ||
-                      (PADDR == ADDR_INTR_RAW) ||
-                      (PADDR == ADDR_INTR_EN) ||
-                      (PADDR == ADDR_TX_DATA) ||
-                      (PADDR == ADDR_RX_DATA) ||
-                      (PADDR == ADDR_BAUD_DIV);
+                       (PADDR == ADDR_STATUS) ||
+                       (PADDR == ADDR_IER) ||
+                       (PADDR == ADDR_TX_DATA) ||
+                       (PADDR == ADDR_RX_DATA) ||
+                       (PADDR == ADDR_BAUD_DIV);
 
   // Ready and Slave Error logic
   assign PREADY  = 1'b1; // Zero wait-states
@@ -108,116 +103,87 @@ module uart_reg_file (
     end
   end
 
-  // 2. Status Register (STATUS)
-  // [0]: tx_ready (from hardware)
-  // [1]: rx_valid_status (set by rx_valid_hw, cleared by reading RX_DATA)
-  // [2]: dor_reg (Data Overrun, set when new rx data comes but rx_valid_status is still 1)
-  logic rx_valid_status;
-  logic dor_reg;
-
-  always_ff @(posedge PCLK or negedge PRESETn) begin
-    if (!PRESETn) begin
-      rx_valid_status <= 1'b0;
-    end else begin
-      // Set when new data arrives, clear when RX_DATA register is read
-      rx_valid_status <= (rx_valid_status | rx_valid_hw) & ~(reg_read && PADDR == ADDR_RX_DATA);
-    end
-  end
-
-  always_ff @(posedge PCLK or negedge PRESETn) begin
-    if (!PRESETn) begin
-      dor_reg <= 1'b0;
-    end else begin
-      if (rx_valid_hw && rx_valid_status && !(reg_read && PADDR == ADDR_RX_DATA)) begin
-        dor_reg <= 1'b1;
-      end else if (reg_read && PADDR == ADDR_RX_DATA) begin
-        dor_reg <= 1'b0;
-      end
-    end
-  end
   // TX buffer empty status for register interface (UDRE / transmit buffer empty)
   logic tx_pending;
   logic tx_ready_reg_file;
   assign tx_ready_reg_file = tx_ready_hw && !tx_pending;
 
-  // 3. Raw Interrupt Register (INTR_RAW / RIS)
-  // [0]: tx_done_raw
-  // [1]: parity_error_raw
-  // [2]: framing_error_raw
-  // [3]: rx_done_raw
-  // [4]: tx_ready_raw (Level-sensitive, reflecting tx_ready_hw status)
-  // [5]: overrun_error_raw (Data Overrun)
-  // Write-1-to-Clear (W1C) for bits [3:0] and [5]
-  logic [5:0] intr_raw_reg;
-  logic [4:0] intr_raw_latched;
+  // 2. Status Register (STATUS) - Combines raw flags and status
+  // [0]: tx_done (W1C)
+  // [1]: parity_error (W1C)
+  // [2]: framing_error (W1C)
+  // [3]: rx_done (set on rx_valid_hw, cleared on RX_DATA read or W1C)
+  // [4]: tx_ready (Level-sensitive, reflecting tx_ready_hw status)
+  // [5]: overrun_error (set on overrun, cleared on RX_DATA read or W1C)
+  logic [5:0] status_reg;
+  logic [4:0] status_latched;
 
-  assign intr_raw_reg[3:0] = intr_raw_latched[3:0];
-  assign intr_raw_reg[4]   = tx_ready_reg_file;
-  assign intr_raw_reg[5]   = intr_raw_latched[4];
+  assign status_reg[3:0] = status_latched[3:0];
+  assign status_reg[4]   = tx_ready_reg_file;
+  assign status_reg[5]   = status_latched[4];
 
   always_ff @(posedge PCLK or negedge PRESETn) begin
     if (!PRESETn) begin
-      intr_raw_latched <= 5'b00000;
+      status_latched <= 5'b00000;
     end else begin
       // Latch hardware events and handle W1C
       // Bit 0: TX Done
       if (tx_done_hw) begin
-        intr_raw_latched[0] <= 1'b1;
-      end else if (reg_write && PADDR == ADDR_INTR_RAW && PWDATA[0]) begin
-        intr_raw_latched[0] <= 1'b0;
+        status_latched[0] <= 1'b1;
+      end else if (reg_write && PADDR == ADDR_STATUS && PWDATA[0]) begin
+        status_latched[0] <= 1'b0;
       end
 
       // Bit 1: Parity Error
       if (rx_valid_hw && rx_parity_error_hw) begin
-        intr_raw_latched[1] <= 1'b1;
-      end else if (reg_write && PADDR == ADDR_INTR_RAW && PWDATA[1]) begin
-        intr_raw_latched[1] <= 1'b0;
+        status_latched[1] <= 1'b1;
+      end else if (reg_write && PADDR == ADDR_STATUS && PWDATA[1]) begin
+        status_latched[1] <= 1'b0;
       end
 
       // Bit 2: Framing Error
       if (rx_valid_hw && rx_framing_error_hw) begin
-        intr_raw_latched[2] <= 1'b1;
-      end else if (reg_write && PADDR == ADDR_INTR_RAW && PWDATA[2]) begin
-        intr_raw_latched[2] <= 1'b0;
+        status_latched[2] <= 1'b1;
+      end else if (reg_write && PADDR == ADDR_STATUS && PWDATA[2]) begin
+        status_latched[2] <= 1'b0;
       end
 
-      // Bit 3: RX Done (set on rx_valid_hw, cleared on RX_DATA read or W1C)
+      // Bit 3: RX Done
       if (rx_valid_hw) begin
-        intr_raw_latched[3] <= 1'b1;
-      end else if ((reg_read && PADDR == ADDR_RX_DATA) || (reg_write && PADDR == ADDR_INTR_RAW && PWDATA[3])) begin
-        intr_raw_latched[3] <= 1'b0;
+        status_latched[3] <= 1'b1;
+      end else if ((reg_read && PADDR == ADDR_RX_DATA) || (reg_write && PADDR == ADDR_STATUS && PWDATA[3])) begin
+        status_latched[3] <= 1'b0;
       end
 
-      // Bit 5: Overrun Error (set on overrun, cleared on RX_DATA read or W1C)
-      if (rx_valid_hw && rx_valid_status && !(reg_read && PADDR == ADDR_RX_DATA)) begin
-        intr_raw_latched[4] <= 1'b1;
-      end else if ((reg_read && PADDR == ADDR_RX_DATA) || (reg_write && PADDR == ADDR_INTR_RAW && PWDATA[5])) begin
-        intr_raw_latched[4] <= 1'b0;
+      // Bit 5: Overrun Error
+      if (rx_valid_hw && status_reg[3] && !(reg_read && PADDR == ADDR_RX_DATA)) begin
+        status_latched[4] <= 1'b1;
+      end else if ((reg_read && PADDR == ADDR_RX_DATA) || (reg_write && PADDR == ADDR_STATUS && PWDATA[5])) begin
+        status_latched[4] <= 1'b0;
       end
     end
   end
 
-  // 4. Interrupt Enable Register (INTR_EN / IER)
+  // 3. Interrupt Enable Register (IER)
   // [0]: tx_done_ie
   // [1]: parity_error_ie
   // [2]: framing_error_ie
   // [3]: rx_done_ie
   // [4]: tx_ready_ie
   // [5]: overrun_error_ie
-  logic [5:0] intr_en_reg;
+  logic [5:0] IER_reg;
 
   always_ff @(posedge PCLK or negedge PRESETn) begin
     if (!PRESETn) begin
-      intr_en_reg <= 6'b000000; // Disabled by default
-    end else if (reg_write && PADDR == ADDR_INTR_EN) begin
-      intr_en_reg <= PWDATA[5:0];
+      IER_reg <= 6'b000000; // Disabled by default
+    end else if (reg_write && PADDR == ADDR_IER) begin
+      IER_reg <= PWDATA[5:0];
     end
   end
 
-  // 5. Masked Interrupt Register (INTR_MASK / MIS)
-  // Evaluated combinationally: RAW & EN
+  // 4. Interrupt Mask Logic (Internal Wires for Outputs)
   logic [5:0] intr_mask_reg;
-  assign intr_mask_reg = intr_raw_reg & intr_en_reg;
+  assign intr_mask_reg = status_reg & IER_reg;
 
   // Interrupt Outputs to Top level
   assign irq_tx_ready    = intr_mask_reg[4];
@@ -228,7 +194,7 @@ module uart_reg_file (
   assign irq_rx_overrun  = intr_mask_reg[5];
   assign irq             = |intr_mask_reg;
 
-  // 6. TX Data Register (TX_DATA)
+  // 5. TX Data Register (TX_DATA)
   // Latches TX data and holds tx_valid_hw using a pending flag until accepted by hardware (tx_ready_hw goes low)
   always_ff @(posedge PCLK or negedge PRESETn) begin
     if (!PRESETn) begin
@@ -246,7 +212,7 @@ module uart_reg_file (
 
   assign tx_valid_hw = tx_pending;
 
-  // 7. RX Data Register (RX_DATA)
+  // 6. RX Data Register (RX_DATA)
   // Latches rx_data_hw from receiver when valid is asserted
   logic [7:0] rx_data_reg;
 
@@ -262,9 +228,8 @@ module uart_reg_file (
   always_comb begin
     case (PADDR)
       ADDR_CFG:       PRDATA = {22'b0, cfg_reg};
-      ADDR_STATUS:    PRDATA = {29'b0, dor_reg, rx_valid_status, tx_ready_reg_file};
-      ADDR_INTR_RAW:  PRDATA = {26'b0, intr_raw_reg};
-      ADDR_INTR_EN:   PRDATA = {26'b0, intr_en_reg};
+      ADDR_STATUS:    PRDATA = {26'b0, status_reg};
+      ADDR_IER:       PRDATA = {26'b0, IER_reg};
       ADDR_RX_DATA:   PRDATA = {24'b0, rx_data_reg};
       ADDR_BAUD_DIV:  PRDATA = {16'b0, baud_div_reg};
       default:        PRDATA = 32'b0;

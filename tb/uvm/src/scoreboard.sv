@@ -33,7 +33,7 @@ class uart_scoreboard extends uvm_scoreboard;
   // APB Transaction Monitor write implementation
   function void write_apb(apb_seq_item trans);
     // TX Data Write
-    if (trans.write && trans.addr == 5'h14) begin
+    if (trans.write && trans.addr == 5'h0C) begin
       // Verify tx_enable is active
       bit [31:0] cfg_val = reg_model.cfg.get_mirrored_value();
       if (cfg_val[8] == 1'b1) begin // tx_enable is bit 8
@@ -43,7 +43,7 @@ class uart_scoreboard extends uvm_scoreboard;
     end
 
     // RX Data Read
-    if (!trans.write && trans.addr == 5'h18) begin
+    if (!trans.write && trans.addr == 5'h10) begin
       `uvm_info("SCB_RX", $sformatf("Read RX Byte from APB: %h", trans.rdata[7:0]), UVM_MEDIUM)
       if (rx_expected_q.size() == 0) begin
         `uvm_error("SCB_RX_ERR", $sformatf("Read RX Data %h from APB, but rx_expected_q is empty!", trans.rdata[7:0]))
