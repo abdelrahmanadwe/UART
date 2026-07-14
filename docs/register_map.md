@@ -12,14 +12,15 @@ This document describes the memory-mapped register interface of the UART periphe
 
 ## Register Summary
 
+| Address | Register | Access | Reset Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
 | `0x00` | [CFG](#0x00--cfg--configuration-register) | RW | `0x0000_0018` | Line configuration & enables (data size, parity, stop bits, enables). |
-| `0x04` | [STATUS](#0x04--status--status-register) | RO | `0x0000_0001` | TX ready and RX data available status flags. |
-| `0x08` | [RIS](#0x08--ris--raw-interrupt-status) | RW1C / RO | `0x0000_0010` | Raw (unmasked) interrupt event flags. Bit 4 is level-sensitive (RO), bits [3:0] are W1C. |
-| `0x0C` | [IER](#0x0c--ier--interrupt-enable-register) | RW | `0x0000_0000` | Interrupt enable masks. |
-| `0x10` | — | — | — | **Reserved / Unmapped** (Triggers `PSLVERR` on access). |
-| `0x14` | [TX_DATA](#0x14--tx_data--transmit-data-register) | WO | `0x0000_0000` | Data byte to transmit. |
-| `0x18` | [RX_DATA](#0x18--rx_data--receive-data-register) | RO | `0x0000_0000` | Last received data byte. Reading clears `STATUS.rx_valid` and `RIS.rx_done`. |
-| `0x1C` | [BAUD_DIV](#0x1c--baud_div--baud-rate-divisor-register) | RW | `0x0000_00A3` | Baud rate divisor value. |
+| `0x04` | [STATUS](#0x04--status--status-and-raw-interrupt-register) | RW1C / RO | `0x0000_0010` | Consolidated status and raw interrupt event flags. Bit 4 is level-sensitive (RO), others are W1C. |
+| `0x08` | [IER](#0x08--ier--interrupt-enable-register) | RW | `0x0000_0000` | Interrupt enable masks. |
+| `0x0C` | [TX_DATA](#0x0c--tx_data--transmit-data-register) | WO | `0x0000_0000` | Data byte to transmit. |
+| `0x10` | [RX_DATA](#0x10--rx_data--receive-data-register) | RO | `0x0000_0000` | Last received data byte. Reading auto-clears `STATUS.rx_done` and `STATUS.overrun_error`. |
+| `0x14` | [BAUD_DIV](#0x14--baud_div--baud-rate-divisor-register) | RW | `0x0000_00A3` | Baud rate divisor value. |
+| `0x18` to `0x1C` | — | — | — | **Reserved / Unmapped** (Triggers `PSLVERR` on access). |
 
 > [!NOTE]
 > **Access Types**: **RW** = Read/Write, **RO** = Read Only, **WO** = Write Only, **RW1C** = Read / Write-1-to-Clear.
@@ -65,41 +66,28 @@ Configures the UART line parameters and enables/disables transmission/reception.
 
 ---
 
-### `0x04` — STATUS (Status Register)
+### `0x04` — STATUS (Status and Raw Interrupt Register)
 
-Read-only register reflecting the current hardware status of the transmitter and receiver.
-
-| Bits | Field | Access | Reset | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `[0]` | `tx_ready` | RO | `1` | `1` = Transmitter buffer is empty and ready to accept a new byte via `TX_DATA`. `0` = Transmit register is full/busy. |
-| `[1]` | `rx_valid` | RO | `0` | `1` = A new byte has been received and is available in `RX_DATA`. Auto-clears when `RX_DATA` is read. |
-| `[2]` | `dor` | RO | `0` | `1` = Data OverRun. Set when a new byte is received before the previous one was read. Auto-clears when `RX_DATA` is read. |
-| `[31:3]` | — | — | `0` | Reserved. |
-
-> [!TIP]
-> Software should poll `STATUS.tx_ready` (or wait for the `tx_ready` interrupt) before writing to `TX_DATA`. Writes to `TX_DATA` while `tx_ready == 0` or while `tx_enable == 0` are silently ignored.
-
----
-
-### `0x08` — RIS (Raw Interrupt Status)
-
-Latches hardware interrupt events regardless of the interrupt enable mask.
+Consolidated status register reflecting both the active hardware states and raw interrupt events (similar to STM32 `USART_SR`).
 
 | Bits | Field | Access | Reset | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `[0]` | `tx_done` | RW1C | `0` | Set when the transmitter completes sending a byte (including stop bit). Cleared by writing `1`. |
-| `[1]` | `parity_error` | RW1C | `0` | Set when the receiver detects a parity mismatch. Cleared by writing `1`. |
-| `[2]` | `framing_error` | RW1C | `0` | Set when the receiver does not detect a valid stop bit. Cleared by writing `1`. |
-| `[3]` | `rx_done` | RW1C | `0` | Set when the receiver completes receiving a byte. **Auto-clears** when `RX_DATA` (`0x18`) is read, or by writing `1`. |
-| `[4]` | `tx_ready` | RO | `1` | **Level-sensitive**. Reflected directly from `STATUS.tx_ready` (1 when TX buffer is empty). |
-| `[5]` | `overrun_error` | RW1C | `0` | Set when receiver buffer overruns. **Auto-clears** when `RX_DATA` (`0x18`) is read, or by writing `1`. |
+| `[0]` | `tx_done` | RW1C | `0` | Set when transmitter completes sending a frame (including stop bit). Cleared by writing `1`. |
+| `[1]` | `parity_error` | RW1C | `0` | Set when receiver detects a parity mismatch. Cleared by writing `1`. |
+| `[2]` | `framing_error` | RW1C | `0` | Set when receiver does not detect a valid stop bit. Cleared by writing `1`. |
+| `[3]` | `rx_done` | RW1C | `0` | Set when receiver completes receiving a byte. **Auto-clears** when `RX_DATA` (`0x10`) is read, or by writing `1`. |
+| `[4]` | `tx_ready` | RO | `1` | **Level-sensitive**. `1` when transmit buffer is empty and ready for a new byte via `TX_DATA`. |
+| `[5]` | `overrun_error` | RW1C | `0` | Set when receiver buffer overruns. **Auto-clears** when `RX_DATA` (`0x10`) is read, or by writing `1`. |
 | `[31:6]` | — | — | `0` | Reserved. |
 
+> [!TIP]
+> Software should poll `STATUS.tx_ready` (bit 4) before writing to `TX_DATA`. Writes to `TX_DATA` while `tx_ready == 0` or while `tx_enable == 0` are silently ignored.
+
 ---
 
-### `0x0C` — IER (Interrupt Enable Register)
+### `0x08` — IER (Interrupt Enable Register)
 
-Controls which raw interrupt events are allowed to propagate to the masked interrupt status (`MIS`) and ultimately to the global `irq` output pin.
+Controls which status event flags inside `STATUS` are allowed to trigger masked interrupt outputs and the global `irq` pin.
 
 | Bits | Field | Access | Reset | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -111,15 +99,9 @@ Controls which raw interrupt events are allowed to propagate to the masked inter
 | `[5]` | `overrun_error_ie` | RW | `0` | `1` = Enable `overrun_error` interrupt. |
 | `[31:6]` | — | — | `0` | Reserved. |
 
----
+The individual masked interrupt statuses (computed combinationally as `intr_mask = STATUS & IER`) are routed directly to output pins at the top level for system-level routing, but are not readable via a separate APB register:
 
-### `0x10` — Reserved / Unmapped Offset
-
-This offset is reserved. Any read or write access to this address will fail and trigger a bus error (`PSLVERR` is asserted).
-
-The individual masked interrupt statuses (computed combinationally as `intr_mask = RIS & IER`) are still routed directly to output pins at the top level for system-level routing, but are not readable via the APB register interface:
-
-| Masked Interrupt Bit | Output Pin |
+| Masked Interrupt | Output Pin |
 | :--- | :--- |
 | `tx_done` enabled | `irq_tx_done` |
 | `parity_error` enabled | `irq_rx_parity` |
@@ -128,11 +110,11 @@ The individual masked interrupt statuses (computed combinationally as `intr_mask
 | `tx_ready` enabled | `irq_tx_ready` |
 | `overrun_error` enabled | `irq_rx_overrun` |
 
-The global `irq` output pin is the logical OR of all active enabled interrupts: **`irq = |(RIS & IER)`**.
+The global `irq` output pin is the logical OR of all active enabled interrupts: **`irq = |(STATUS & IER)`**.
 
 ---
 
-### `0x14` — TX_DATA (Transmit Data Register)
+### `0x0C` — TX_DATA (Transmit Data Register)
 
 Write-only register. Writing a byte to this register initiates a UART transmission.
 
@@ -146,9 +128,9 @@ Write-only register. Writing a byte to this register initiates a UART transmissi
 
 ---
 
-### `0x18` — RX_DATA (Receive Data Register)
+### `0x10` — RX_DATA (Receive Data Register)
 
-Read-only register holding the last received byte.
+Read-only register holding the last received byte. Reading this register automatically clears `STATUS.rx_done` and `STATUS.overrun_error`.
 
 | Bits | Field | Access | Reset | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -157,7 +139,7 @@ Read-only register holding the last received byte.
 
 ---
 
-### `0x1C` — BAUD_DIV (Baud Rate Divisor Register)
+### `0x14` — BAUD_DIV (Baud Rate Divisor Register)
 
 Read/Write register configuring the baud rate division factor. This register is frequency-independent and works across any clock rate.
 
@@ -189,18 +171,14 @@ $$\text{divisor} = \frac{F_{\text{CLK}}}{\text{Baud Rate} \times 16}$$
  0x00     ┌───────────────────────────────┐
           │         CFG (RW)              │
  0x04     ├───────────────────────────────┤
-          │       STATUS (RO)             │
+          │       STATUS (Mix)            │
  0x08     ├───────────────────────────────┤
-          │        RIS (Mix)              │
+          │         IER (RW)              │
  0x0C     ├───────────────────────────────┤
-          │        IER (RW)               │
+          │       TX_DATA (WO)            │
  0x10     ├───────────────────────────────┤
-          │        MIS (RO)               │
+          │       RX_DATA (RO)            │
  0x14     ├───────────────────────────────┤
-          │      TX_DATA (WO)             │
- 0x18     ├───────────────────────────────┤
-          │      RX_DATA (RO)             │
- 0x1C     ├───────────────────────────────┤
           │      BAUD_DIV (RW)            │
           └───────────────────────────────┘
 ```
@@ -218,10 +196,10 @@ UART->BAUD_DIV = 27;
 UART->CFG = 0x318; 
 ```
 
-### Transmitting a Byte
+### Transmitting a Byte (Polling)
 ```c
-// 1. Wait until transmitter is ready
-while (!(UART->STATUS & 0x1));
+// 1. Wait until transmitter is ready (STATUS bit 4 is tx_ready)
+while (!(UART->STATUS & 0x10));
 
 // 2. Write data to TX_DATA
 UART->TX_DATA = byte_to_send;
@@ -229,10 +207,10 @@ UART->TX_DATA = byte_to_send;
 
 ### Receiving a Byte (Polling)
 ```c
-// 1. Wait until a byte is available
-while (!(UART->STATUS & 0x2));
+// 1. Wait until a byte is available (STATUS bit 3 is rx_done)
+while (!(UART->STATUS & 0x08));
 
-// 2. Read data from RX_DATA (auto-clears rx_valid and rx_done)
+// 2. Read data from RX_DATA (auto-clears STATUS.rx_done and STATUS.overrun_error)
 uint8_t received = UART->RX_DATA & 0xFF;
 ```
 
@@ -243,11 +221,16 @@ UART->IER = 0x8; // Enable bit 3 (rx_done)
 
 // ISR:
 void UART_IRQHandler(void) {
-    if (UART->MIS & 0x8) {
-        uint8_t data = UART->RX_DATA; // Auto-clears RIS.rx_done
+    uint32_t status = UART->STATUS;
+    uint32_t ier = UART->IER;
+    
+    // Check if rx_done interrupt fired (both STATUS.rx_done and IER.rx_done_ie are high)
+    if ((status & 0x08) && (ier & 0x08)) {
+        uint8_t data = UART->RX_DATA; // Reading RX_DATA auto-clears STATUS.rx_done
         // Process data...
     }
-    // Clear any remaining events
-    UART->RIS = UART->RIS; // W1C all active flags
+    
+    // Clear any other active interrupts (e.g. parity_error, framing_error, overrun_error, tx_done)
+    UART->STATUS = status; // W1C all active flags
 }
 ```
