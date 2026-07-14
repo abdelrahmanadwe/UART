@@ -21,8 +21,10 @@ package uart_uvm_pkg;
   `include "uart_agent/uart_agent.sv"
 
   // 3. Register Model
+  `include "reg_model/reg2apb_adapter.sv"
+  `include "reg_model/uart_reg_predictor.sv"
   `include "reg_model/uart_reg_block.sv"
-  `include "reg_model/uart_coverage.sv"
+  `include "uart_coverage.sv"
 
   // 4. Scoreboard
   `include "scoreboard.sv"
