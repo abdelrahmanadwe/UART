@@ -381,6 +381,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     uart_send_frame_seq uart_seq;
     bit [31:0] cfg_val;
     bit [31:0] div_val;
+    bit [31:0] rx_data_val;
 
     `uvm_info("VSEQ_ILLEGAL", "Starting Illegal/Corner-Case Randomized Verification...", UVM_MEDIUM)
 
@@ -502,7 +503,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
       end
 
       // Read RX_DATA to flush queue and clear hardware flags
-      reg_model.rx_data.read(status, read_val, .parent(this));
+      reg_model.rx_data.read(status, rx_data_val, .parent(this));
 
       // Clear parity/framing error flags (W1C)
       if (read_val[1] || read_val[2] || read_val[0]) begin
@@ -510,7 +511,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
       end
 
       // Wait extra idle time to prevent desynchronization of the next frame
-      #100000ns;
+      #60us;
     end
 
     // Case 6: Accessing Reserved/Unsupported Parity Mode (2'b01)
