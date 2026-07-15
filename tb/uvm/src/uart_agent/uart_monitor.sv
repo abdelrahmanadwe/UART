@@ -85,10 +85,19 @@ class uart_monitor extends uvm_monitor;
         repeat (bit_cycles) @(posedge vif_apb.PCLK);
       end
 
-      // Sample first stop bit
+      // Sample first stop bit (already aligned to the middle of the first stop bit period)
       if (vif.tx_serial !== 1'b1) begin
         item.error_type = ERR_FRAMING;
       end
+      if (stop == STOP_2_BITS) begin
+        repeat (bit_cycles) @(posedge vif_apb.PCLK); // get to middle of second stop bit
+        if (vif.tx_serial !== 1'b1) begin
+          item.error_type = ERR_FRAMING;
+        end
+      end
+
+      `uvm_info("MON_TX_DEBUG", $sformatf("Decoded TX Frame: data=%h, size=%0d, parity=%0d, stop=%0d, baud_div=%0d, error=%s", 
+                item.data, size, parity, stop, baud_div, item.error_type.name()), UVM_MEDIUM)
 
       // Publish decoded transaction to scoreboard
       tx_ap.write(item);
@@ -152,10 +161,19 @@ class uart_monitor extends uvm_monitor;
         repeat (bit_cycles) @(posedge vif_apb.PCLK);
       end
 
-      // Sample first stop bit
+      // Sample first stop bit (already aligned to the middle of the first stop bit period)
       if (vif.rx_serial !== 1'b1) begin
         item.error_type = ERR_FRAMING;
       end
+      if (stop == STOP_2_BITS) begin
+        repeat (bit_cycles) @(posedge vif_apb.PCLK); // get to middle of second stop bit
+        if (vif.rx_serial !== 1'b1) begin
+          item.error_type = ERR_FRAMING;
+        end
+      end
+
+      `uvm_info("MON_RX_DEBUG", $sformatf("Decoded RX Frame: data=%h, size=%0d, parity=%0d, stop=%0d, baud_div=%0d, error=%s", 
+                item.data, size, parity, stop, baud_div, item.error_type.name()), UVM_MEDIUM)
 
       // Publish decoded transaction to scoreboard
       rx_ap.write(item);

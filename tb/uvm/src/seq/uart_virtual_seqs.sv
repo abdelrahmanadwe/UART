@@ -379,6 +379,8 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     bit [31:0] read_val;
     bit [7:0] rand_data;
     uart_send_frame_seq uart_seq;
+    bit [31:0] cfg_val;
+    bit [31:0] div_val;
 
     `uvm_info("VSEQ_ILLEGAL", "Starting Illegal/Corner-Case Randomized Verification...", UVM_MEDIUM)
 
@@ -423,63 +425,93 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
     reg_model.baud_div.write(status, 32'd163, .parent(this)); // 163 divisor
     #1us;
 
-    // Case 4: Send serial frame with Parity Error
-    `uvm_info("VSEQ_ILLEGAL", "Case 4: Injecting Parity Error on serial line", UVM_MEDIUM)
-    reg_model.cfg.write(status, 32'h358, .parent(this)); // enable parity (even = 2'b10), tx/rx enabled
-    reg_model.status.write(status, 32'h3F, .parent(this)); // clear flags
-    
-    uart_seq = uart_send_frame_seq::type_id::create("uart_seq");
-    if (!uart_seq.randomize() with {
-      data        == 8'hA5;
-      data_size   == DATA_8_BITS;
-      parity_ctrl == PARITY_EVEN;
-      stop_bits   == STOP_1_BIT;
-      baud_div    == 16'd163;
-      error_type  == ERR_PARITY; // Inject error!
-    }) begin
-      `uvm_error("VSEQ_ILLEGAL_ERR", "uart_send_frame_seq randomization failed")
+    // Case 4 & 5: Randomized Error Injection under Randomized Configurations
+    `uvm_info("VSEQ_ILLEGAL", "Case 4 & 5: Running randomized error injection loop (30 iterations)", UVM_MEDIUM)
+    repeat (30) begin
+      uart_error_e rand_err_type;
+      
+      // Randomize line configuration (exclude reserved parity 2'b01)
+      if (!reg_model.cfg.randomize() with {
+        tx_enable.value == 1'b1;
+        rx_enable.value == 1'b1;
+        parity.value    != 2'b01;
+      }) begin
+        `uvm_error("VSEQ_ILLEGAL_ERR", "CFG register randomization failed inside error loop")
+      end
+
+      // Update the hardware configuration registers first
+      reg_model.cfg.update(status, .parent(this));
+      reg_model.baud_div.update(status, .parent(this));
+      reg_model.ier.update(status, .parent(this));
+      reg_model.status.write(status, 32'h3F, .parent(this)); // clear flags
+      
+      // Now fetch the updated mirrored value (after update) to configure the serial monitor/driver
+      cfg_val = reg_model.cfg.get_mirrored_value();
+      div_val = reg_model.baud_div.get_mirrored_value();
+
+      // If parity is disabled, we cannot test parity error! So force it to be ERR_NONE or ERR_FRAMING.
+      if (cfg_val[6:5] == 2'b00) begin // parity is disabled
+        rand_err_type = $urandom_range(0, 1) ? ERR_NONE : ERR_FRAMING;
+      end else begin
+        // parity is enabled: can test all error types
+        int r = $urandom_range(0, 2);
+        rand_err_type = (r == 0) ? ERR_NONE : ((r == 1) ? ERR_PARITY : ERR_FRAMING);
+      end
+
+      rand_data = $urandom;
+
+      uart_seq = uart_send_frame_seq::type_id::create("uart_seq");
+      if (!uart_seq.randomize() with {
+        data        == rand_data;
+        data_size   == data_size_e'(cfg_val[4:3]);
+        parity_ctrl == parity_ctrl_e'(cfg_val[6:5]);
+        stop_bits   == stop_bits_e'(cfg_val[7]);
+        baud_div    == div_val[15:0];
+        error_type  == rand_err_type;
+      }) begin
+        `uvm_error("VSEQ_ILLEGAL_ERR", "uart_send_frame_seq randomization failed")
+      end
+      
+      `uvm_info("VSEQ_ILLEGAL", $sformatf("Driving serial frame: data=%h, size=%0d, parity=%0d, stop=%0d, err=%s", 
+                rand_data, cfg_val[4:3], cfg_val[6:5], cfg_val[7], rand_err_type.name()), UVM_MEDIUM)
+                
+      uart_seq.start(uart_seqr);
+
+      // Poll rx_done (bit 3) actively to wait for complete hardware frame reception
+      read_val = 32'h0;
+      while (read_val[3] == 1'b0) begin
+        reg_model.status.read(status, read_val, .parent(this));
+        #100ns;
+      end
+
+      // Read STATUS to verify flags
+      reg_model.status.read(status, read_val, .parent(this));
+      
+      // Verification of parity_error flag (bit 1)
+      if (rand_err_type == ERR_PARITY) begin
+        if (read_val[1] !== 1'b1) begin
+          `uvm_error("VSEQ_ILLEGAL_ERR", $sformatf("Parity error flag not set! STATUS = %h", read_val))
+        end
+      end
+      
+      // Verification of framing_error flag (bit 2)
+      if (rand_err_type == ERR_FRAMING) begin
+        if (read_val[2] !== 1'b1) begin
+          `uvm_error("VSEQ_ILLEGAL_ERR", $sformatf("Framing error flag not set! STATUS = %h", read_val))
+        end
+      end
+
+      // Read RX_DATA to flush queue and clear hardware flags
+      reg_model.rx_data.read(status, read_val, .parent(this));
+
+      // Clear parity/framing error flags (W1C)
+      if (read_val[1] || read_val[2] || read_val[0]) begin
+        reg_model.status.write(status, 32'h3F, .parent(this));
+      end
+
+      // Wait extra idle time to prevent desynchronization of the next frame
+      #100000ns;
     end
-    uart_seq.start(uart_seqr);
-    #300000ns;
-
-    // Read STATUS to verify error flag is set
-    reg_model.status.read(status, read_val, .parent(this));
-    $display("[VSEQ] STATUS post parity error = %h (Expected parity_error=1 at bit 1)", read_val);
-    if (read_val[1] !== 1'b1) begin
-      `uvm_error("VSEQ_ILLEGAL_ERR", "Parity error flag (STATUS[1]) not set on parity error reception!")
-    end
-
-    // Read RX_DATA to flush queue and clear hardware flags
-    reg_model.rx_data.read(status, read_val, .parent(this));
-
-    // Case 5: Send serial frame with Framing Error
-    `uvm_info("VSEQ_ILLEGAL", "Case 5: Injecting Framing Error on serial line", UVM_MEDIUM)
-    reg_model.status.write(status, 32'h3F, .parent(this)); // clear flags
-    reg_model.cfg.write(status, 32'h318, .parent(this)); // 8-bit, no parity, tx/rx enabled
-    
-    uart_seq = uart_send_frame_seq::type_id::create("uart_seq");
-    if (!uart_seq.randomize() with {
-      data        == 8'h5A;
-      data_size   == DATA_8_BITS;
-      parity_ctrl == PARITY_NONE;
-      stop_bits   == STOP_1_BIT;
-      baud_div    == 16'd163;
-      error_type  == ERR_FRAMING; // Inject error!
-    }) begin
-      `uvm_error("VSEQ_ILLEGAL_ERR", "uart_send_frame_seq randomization failed")
-    end
-    uart_seq.start(uart_seqr);
-    #300000ns;
-
-    // Read STATUS to verify framing error flag is set
-    reg_model.status.read(status, read_val, .parent(this));
-    $display("[VSEQ] STATUS post framing error = %h (Expected framing_error=1 at bit 2)", read_val);
-    if (read_val[2] !== 1'b1) begin
-      `uvm_error("VSEQ_ILLEGAL_ERR", "Framing error flag (STATUS[2]) not set on framing error reception!")
-    end
-
-    // Read RX_DATA to flush queue and clear hardware flags
-    reg_model.rx_data.read(status, read_val, .parent(this));
 
     // Case 6: Accessing Reserved/Unsupported Parity Mode (2'b01)
     // Run this under all data sizes and stop bit configurations to cover cross combinations of parity_rsvd!

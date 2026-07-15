@@ -210,6 +210,8 @@ module uart_rx_fsm (
           bit_cnt           <= 3'd0;
           stop_bit_done_cnt <= 1'b0;
           Data_Valid        <= 1'b0;
+          parity_error      <= 1'b0;
+          framing_error     <= 1'b0;
         end
 
         ST_START: begin
@@ -255,6 +257,9 @@ module uart_rx_fsm (
               // Check stop bit
               if (rx_sync_1 !== 1'b1) begin
                 framing_err_detected <= 1'b1;
+                if (!(latched_stop_bits_reg == STOP_2_BITS && stop_bit_done_cnt == 1'b0)) begin
+                  framing_error <= 1'b1;
+                end
               end
               
               if (latched_stop_bits_reg == STOP_2_BITS && stop_bit_done_cnt == 1'b0) begin

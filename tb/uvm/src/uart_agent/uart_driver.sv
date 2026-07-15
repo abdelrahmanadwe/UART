@@ -101,6 +101,9 @@ class uart_driver extends uvm_driver #(uart_seq_item);
         repeat (bit_cycles) @(posedge vif_apb.PCLK);
       end
     end
+    
+    // Return line to idle (high) state after frame completes
+    vif.rx_serial <= 1'b1;
   endtask
 
 endclass
