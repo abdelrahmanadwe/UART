@@ -38,7 +38,7 @@ if { [batch_mode] } {
   # Create directory if it does not exist
   file mkdir "sim/coverage/${test_name}"
   # Write coverage report to text file
-  coverage report -detail -cvg -file "sim/coverage/${test_name}/cov_${test_name}.txt"
+  coverage report -detail -cvg -output "sim/coverage/${test_name}/cov_${test_name}.txt"
   # Save coverage database
   coverage save "sim/coverage/${test_name}/cov_${test_name}.ucdb"
   quit -f

@@ -473,7 +473,7 @@ class uart_illegal_rand_vseq extends uart_vseq_base;
       end
       
       `uvm_info("VSEQ_ILLEGAL", $sformatf("Driving serial frame: data=%h, size=%0d, parity=%0d, stop=%0d, err=%s", 
-                rand_data, cfg_val[4:3], cfg_val[6:5], cfg_val[7], rand_err_type.name()), UVM_MEDIUM)
+                rand_data, cfg_val[4:3], cfg_val[6:5], cfg_val[7], rand_err_type.name()), UVM_DEBUG)
                 
       uart_seq.start(uart_seqr);
 

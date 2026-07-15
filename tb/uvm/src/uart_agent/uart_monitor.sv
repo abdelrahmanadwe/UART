@@ -97,7 +97,7 @@ class uart_monitor extends uvm_monitor;
       end
 
       `uvm_info("MON_TX_DEBUG", $sformatf("Decoded TX Frame: data=%h, size=%0d, parity=%0d, stop=%0d, baud_div=%0d, error=%s", 
-                item.data, size, parity, stop, baud_div, item.error_type.name()), UVM_MEDIUM)
+                item.data, size, parity, stop, baud_div, item.error_type.name()), UVM_DEBUG)
 
       // Publish decoded transaction to scoreboard
       tx_ap.write(item);
@@ -173,7 +173,7 @@ class uart_monitor extends uvm_monitor;
       end
 
       `uvm_info("MON_RX_DEBUG", $sformatf("Decoded RX Frame: data=%h, size=%0d, parity=%0d, stop=%0d, baud_div=%0d, error=%s", 
-                item.data, size, parity, stop, baud_div, item.error_type.name()), UVM_MEDIUM)
+                item.data, size, parity, stop, baud_div, item.error_type.name()), UVM_DEBUG)
 
       // Publish decoded transaction to scoreboard
       rx_ap.write(item);
