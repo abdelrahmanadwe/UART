@@ -2,6 +2,7 @@ class apb_driver extends uvm_driver #(apb_seq_item);
   `uvm_component_utils(apb_driver)
 
   virtual apb_if vif;
+  apb_agent_config cfg;
 
   function new(string name = "apb_driver", uvm_component parent = null);
     super.new(name, parent);
@@ -19,8 +20,8 @@ class apb_driver extends uvm_driver #(apb_seq_item);
     vif.cb.PADDR   <= 5'h0;
     vif.cb.PWDATA  <= 32'h0;
 
-    // Wait for reset release
-    @(posedge vif.PRESETn);
+    // Wait for reset release using config helper
+    cfg.wait_reset_end();
     
     forever begin
       seq_item_port.get_next_item(req);
@@ -30,8 +31,15 @@ class apb_driver extends uvm_driver #(apb_seq_item);
   endtask
 
   task drive_transfer(apb_seq_item item);
-    // Setup Phase
+    // Align with clocking block first
     @(vif.cb);
+
+    // Pre-drive delay
+    for (int i = 0; i < item.pre_drive_delay; i++) begin
+      @(vif.cb);
+    end
+
+    // Setup Phase
     vif.cb.PADDR   <= item.addr;
     vif.cb.PWRITE  <= item.write;
     vif.cb.PSEL    <= 1'b1;
@@ -62,6 +70,14 @@ class apb_driver extends uvm_driver #(apb_seq_item);
     // Clean up
     vif.cb.PSEL    <= 1'b0;
     vif.cb.PENABLE <= 1'b0;
+    vif.cb.PWRITE  <= 1'b0;
+    vif.cb.PADDR   <= 5'h0;
+    vif.cb.PWDATA  <= 32'h0;
+
+    // Post-drive delay
+    for (int i = 0; i < item.post_drive_delay; i++) begin
+      @(vif.cb);
+    end
   endtask
 
 endclass

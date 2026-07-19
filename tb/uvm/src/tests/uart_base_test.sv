@@ -35,8 +35,8 @@ class uart_base_test extends uvm_test;
       `uvm_fatal("BASE_TEST", "Failed to get virtual uart_serial_if from config DB")
     end
 
-    apb_cfg.vif = vif_apb;
-    apb_cfg.is_active = UVM_ACTIVE;
+    apb_cfg.set_vif(vif_apb);
+    apb_cfg.set_is_active(UVM_ACTIVE);
 
     uart_cfg.vif = vif_uart;
     uart_cfg.vif_apb = vif_apb;

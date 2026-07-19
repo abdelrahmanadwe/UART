@@ -2,6 +2,7 @@ class apb_monitor extends uvm_monitor;
   `uvm_component_utils(apb_monitor)
 
   virtual apb_if vif;
+  apb_agent_config cfg;
   uvm_analysis_port #(apb_seq_item) ap;
 
   function new(string name = "apb_monitor", uvm_component parent = null);
@@ -16,32 +17,55 @@ class apb_monitor extends uvm_monitor;
   task run_phase(uvm_phase phase);
     apb_seq_item trans;
 
-    @(posedge vif.PRESETn);
+    // Wait for reset release using config helper
+    cfg.wait_reset_end();
 
     forever begin
-      @(vif.monitor_cb);
-      // Sample transaction at the end of setup phase/access phase
-      if (vif.monitor_cb.PSEL && vif.monitor_cb.PENABLE) begin
-        // Wait for PREADY
-        while (vif.monitor_cb.PREADY !== 1'b1) begin
-          @(vif.monitor_cb);
-        end
+      trans = apb_seq_item::type_id::create("trans");
+      trans.prev_item_delay = 0;
+      trans.length = 0;
 
-        // Transaction complete, sample it
-        trans = apb_seq_item::type_id::create("trans");
-        trans.addr   = vif.monitor_cb.PADDR;
-        trans.write  = vif.monitor_cb.PWRITE;
-        trans.slverr = vif.monitor_cb.PSLVERR;
-        if (vif.monitor_cb.PWRITE) begin
-          trans.wdata = vif.monitor_cb.PWDATA;
-        end else begin
-          trans.rdata = vif.monitor_cb.PRDATA;
-        end
-
-        ap.write(trans);
-        `uvm_info("APB_MON_TRACK", $sformatf("Time=%0t PADDR=%h PWRITE=%b PWDATA=%h PRDATA=%h PREADY=1 PSLVERR=%b",
-                  $time, trans.addr, trans.write, trans.wdata, trans.rdata, trans.slverr), UVM_HIGH)
+      // Wait for PSEL to assert while counting idle delay
+      while (vif.monitor_cb.PSEL !== 1'b1) begin
+        @(vif.monitor_cb);
+        trans.prev_item_delay++;
       end
+
+      // Setup phase sampling
+      trans.addr  = vif.monitor_cb.PADDR;
+      trans.write = vif.monitor_cb.PWRITE;
+      trans.length = 1;
+      if (trans.write) begin
+        trans.wdata = vif.monitor_cb.PWDATA;
+      end
+
+      // Transition to Access Phase
+      @(vif.monitor_cb);
+      trans.length++;
+
+      // Wait for PREADY
+      while (vif.monitor_cb.PREADY !== 1'b1) begin
+        @(vif.monitor_cb);
+        trans.length++;
+        
+        if (cfg.get_has_checks()) begin
+          if (trans.length >= cfg.get_stuck_threshold()) begin
+            `uvm_error("APB_STUCK", $sformatf("The APB transfer reached the stuck threshold value of %0d", trans.length))
+          end
+        end
+      end
+
+      // Sample read data and response
+      trans.slverr = vif.monitor_cb.PSLVERR;
+      if (!trans.write) begin
+        trans.rdata = vif.monitor_cb.PRDATA;
+      end
+
+      ap.write(trans);
+      `uvm_info("APB_MON_TRACK", $sformatf("Time=%0t Monitored item:: %0s", $time, trans.convert2string()), UVM_HIGH)
+
+      // Move past the end of the transaction
+      @(vif.monitor_cb);
     end
   endtask
 
