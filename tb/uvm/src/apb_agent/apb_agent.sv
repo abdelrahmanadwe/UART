@@ -1,7 +1,4 @@
-// Typedef for APB Sequencer is defined in the package as:
-// typedef uvm_sequencer #(apb_seq_item) apb_sequencer;
-
-class apb_agent extends uvm_agent;
+class apb_agent extends uvm_agent implements apb_reset_handler;
   `uvm_component_utils(apb_agent)
 
   apb_agent_config cfg;
@@ -29,7 +26,7 @@ class apb_agent extends uvm_agent;
     ap      = new("ap", this);
 
     if (is_active == UVM_ACTIVE) begin
-      sequencer = uvm_sequencer#(apb_seq_item)::type_id::create("sequencer", this);
+      sequencer = apb_sequencer::type_id::create("sequencer", this);
       driver    = apb_driver::type_id::create("driver", this);
     end
   endfunction
@@ -45,6 +42,25 @@ class apb_agent extends uvm_agent;
       driver.cfg = cfg;
       driver.vif = cfg.get_vif();
       driver.seq_item_port.connect(sequencer.seq_item_export);
+    end
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    forever begin
+      cfg.wait_reset_start();
+      handle_reset(phase);
+      cfg.wait_reset_end();
+    end
+  endtask
+
+  virtual function void handle_reset(uvm_phase phase);
+    uvm_component children[$];
+    get_children(children);
+    foreach (children[idx]) begin
+      apb_reset_handler handler;
+      if ($cast(handler, children[idx])) begin
+        handler.handle_reset(phase);
+      end
     end
   endfunction
 

@@ -1,8 +1,10 @@
-class apb_driver extends uvm_driver #(apb_seq_item);
+class apb_driver extends uvm_driver #(apb_seq_item) implements apb_reset_handler;
   `uvm_component_utils(apb_driver)
 
   virtual apb_if vif;
   apb_agent_config cfg;
+
+  protected process process_drive_transactions;
 
   function new(string name = "apb_driver", uvm_component parent = null);
     super.new(name, parent);
@@ -13,6 +15,18 @@ class apb_driver extends uvm_driver #(apb_seq_item);
   endfunction
 
   task run_phase(uvm_phase phase);
+    forever begin
+      fork
+        begin
+          cfg.wait_reset_end();
+          drive_transactions();
+          disable fork;
+        end
+      join
+    end
+  endtask
+
+  protected virtual task drive_transactions();
     // Initialize signals
     vif.cb.PSEL    <= 1'b0;
     vif.cb.PENABLE <= 1'b0;
@@ -20,15 +34,31 @@ class apb_driver extends uvm_driver #(apb_seq_item);
     vif.cb.PADDR   <= 5'h0;
     vif.cb.PWDATA  <= 32'h0;
 
-    // Wait for reset release using config helper
-    cfg.wait_reset_end();
-    
-    forever begin
-      seq_item_port.get_next_item(req);
-      drive_transfer(req);
-      seq_item_port.item_done();
-    end
+    fork
+      begin
+        process_drive_transactions = process::self();
+        forever begin
+          seq_item_port.get_next_item(req);
+          drive_transfer(req);
+          seq_item_port.item_done();
+        end
+      end
+    join
   endtask
+
+  virtual function void handle_reset(uvm_phase phase);
+    if (process_drive_transactions != null) begin
+      process_drive_transactions.kill();
+      process_drive_transactions = null;
+    end
+
+    // Re-initialize signals
+    vif.cb.PSEL    <= 1'b0;
+    vif.cb.PENABLE <= 1'b0;
+    vif.cb.PWRITE  <= 1'b0;
+    vif.cb.PADDR   <= 5'h0;
+    vif.cb.PWDATA  <= 32'h0;
+  endfunction
 
   task drive_transfer(apb_seq_item item);
     // Align with clocking block first

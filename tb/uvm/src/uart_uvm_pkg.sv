@@ -6,8 +6,9 @@ package uart_uvm_pkg;
 
   // 1. APB Agent files
   `include "apb_agent/apb_agent_config.sv"
+  `include "apb_agent/apb_reset_handler.sv"
   `include "apb_agent/apb_seq_item.sv"
-  typedef uvm_sequencer #(apb_seq_item) apb_sequencer;
+  `include "apb_agent/apb_sequencer.sv"
   `include "apb_agent/apb_driver.sv"
   `include "apb_agent/apb_monitor.sv"
   `include "apb_agent/apb_agent.sv"
